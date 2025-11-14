@@ -12,10 +12,9 @@
    - [7. Registrar y Gestionar Mantenimiento](#7-registrar-y-gestionar-mantenimiento)
    - [8. Generar Informe Histórico / Exportar Datos](#8-generar-informe-histórico-exportar-datos)
    - [9. Registrar Producción Detallada (Jornada y Puesta en Marcha)](#9-registrar-producción-detallada-jornada-y-puesta-en-marcha)
-   - [10. Registrar Tiempo Muerto (Paradas/Downtime)](#10-registrar-tiempo-muerto-paradasdowntime)
-   - [11. Generar Resumen de Producción y KPIs de Eficiencia](#11-generar-resumen-de-producción-y-kpis-de-eficiencia)
-3. [Gestión de Usuarios y Roles](#gestión-de-usuarios-y-roles)
-4. [Auditoría / Log de Cambios Críticos](#auditoría-log-de-cambios-críticos)
+   - [10. Generar Resumen de Producción y KPIs de Eficiencia](#10-generar-resumen-de-producción-y-kpis-de-eficiencia)
+   - [11. Gestión de Usuarios y Roles](#11-gestión-de-usuarios-y-roles)
+   - [12. Auditoría / Log de Cambios Críticos](#12-auditoría-log-de-cambios-críticos)
 5. [Mapeo de Casos de Uso → Endpoints / Eventos / Consultas](#mapeo-de-casos-de-uso--endpoints-eventos-consultas)
 6. [Diagrama de Casos de Uso (PlantUML)](#diagrama-de-casos-de-uso-plantuml)
 7. [Criterios de Aceptación](#criterios-de-aceptación)
@@ -208,25 +207,6 @@
   - Precisión en cálculo de eficiencia y defectos.
   - Trazabilidad completa de quién operó en cada período.
 
-### 10. Registrar Tiempo Muerto (Paradas/Downtime)
-- **Actor(es)**: Supervisor, Operador
-- **Precondiciones**:
-  - Puesta en marcha activa.
-  - Máquina detenida.
-- **Flujo Principal**:
-  1. Supervisor detiene máquina y registra causa (falta_material, cambio_formato, mantenimiento, falla).
-  2. Sistema registra ts_inicio.
-  3. Cuando máquina se reanuda, supervisor registra ts_fin (o automático si es sensor).
-  4. Sistema calcula duracion_segundos y acumula en tiempo_muerto_total de puesta_en_marcha.
-  5. Impacta cálculo de disponibilidad y OEE.
-- **Flujos Alternativos**:
-  - Parada sin motivo registrado → flag para auditoría.
-- **Postcondición**: Downtime registrado, auditable, impactando KPIs de disponibilidad.
-- **Tablas Implicadas**: tiempo_muerto, puesta_en_marcha.
-- **NFR (I4.0)**:
-  - Precisión en captura de tiempos.
-  - Análisis de causas de parada para mejora continua.
-
 ### 11. Generar Resumen de Producción y KPIs de Eficiencia
 - **Actor(es)**: Sistema (automático), Supervisor
 - **Precondiciones**:
@@ -237,21 +217,22 @@
      - Total bueno = SUM(produccion_detalle.cantidad_buena)
      - Total fallado = SUM(produccion_detalle.cantidad_fallada)
      - Tasa defectos = (total_fallado / total_producido) * 100
-     - Tiempo muerto total = SUM(tiempo_muerto.duracion_segundos)
      - Eficiencia = (total_producido / cantidad_esperada) * 100
-     - Disponibilidad = ((ts_fin - ts_inicio) - tiempo_muerto_total) / (ts_fin - ts_inicio) * 100
+     - Disponibilidad = (horas_produccion) / (24 - horas_mantenimiento) * 100
   2. Inserta snapshot en resumen_produccion.
-  3. Crea eventos de alerta si:
+  3. Disponibilidad se calcula dinámicamente consultando registro_mantenimiento.
+  4. Crea eventos de alerta si:
      - Tasa defectos > umbral
      - Eficiencia < 80%
      - Disponibilidad < 85%
 - **Postcondición**: Resumen disponible para reportes y dashboard.
-- **Tablas Implicadas**: resumen_produccion, produccion_detalle, tiempo_muerto, evento_alerta.
+- **Tablas Implicadas**: resumen_produccion, produccion_detalle, registro_mantenimiento, evento_alerta.
 - **NFR (I4.0)**:
   - KPIs derivados automáticos para seguimiento gerencial.
   - Alertas proactivas en caso de desviaciones.
+  - Disponibilidad descontada por mantenimiento planificado.
 
-### 12. Gestión de Usuarios y Roles
+### 11. Gestión de Usuarios y Roles
 - **Actor(es)**: Administrador
 - **Precondiciones**:
   - Admin con permisos elevados.
@@ -265,7 +246,7 @@
 - **NFR (I4.0)**:
   - Autenticación fuerte (2FA), auditoría de acceso y least privilege.
 
-### 13. Auditoría / Log de Cambios Críticos
+### 12. Auditoría / Log de Cambios Críticos
 - **Actor(es)**: Sistema (automatizado), Auditor
 - **Precondiciones**:
   - Triggers o pipeline de logging configurado.

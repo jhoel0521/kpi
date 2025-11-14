@@ -22,12 +22,12 @@
 
 Este diseño de base de datos soporta un sistema KPI industrial con:
 - **Ingesta en tiempo real** (mediciones de sensores vía HTTP + cola de tareas).
-- **Medición de producción por jornadas** (turnos, puestas en marcha, cantidad producida/buena/fallada).
-- **Control de tiempo muerto** (registro de pausas y sus causas).
+- **Medición de producción por jornadas** (turnos multi-día, puestas en marcha, cantidad producida/buena/fallada).
+- **Control de disponibilidad** (descontando tiempo de mantenimiento planificado).
 - **Cálculo de KPIs** (agregaciones periódicas o streaming, incluyendo eficiencia de producción).
 - **Alertas y notificaciones** (reglas condicionales con múltiples canales).
 - **Auditoría completa** (trazabilidad de cambios críticos).
-- **Gestión de activos** (máquinas, sensores, líneas de producción).
+- **Gestión de activos** (máquinas, sensores, líneas de producción, operadores).
 
 **Principios**:
 - Tablas en **español** (según nomenclatura industrial local).
@@ -203,22 +203,6 @@ Table produccion_detalle {
   }
 }
 
-Table tiempo_muerto {
-  id bigint [pk, increment]
-  puesta_en_marcha_id bigint [not null]
-  maquina_id bigint [not null]
-  ts_inicio timestamp [not null, note: "cuándo empezó la parada"]
-  ts_fin timestamp [null, note: "cuándo se reanudó"]
-  razon varchar [not null, note: "falta_material, cambio_formato, mantenimiento, falla"]
-  duracion_segundos int [null, note: "calculado: ts_fin - ts_inicio"]
-  descripcion text [null]
-  creado_en timestamp [default: "now()"]
-  actualizado_en timestamp
-  indexes {
-    (puesta_en_marcha_id, ts_inicio) [type: btree]
-  }
-}
-
 Table resumen_produccion {
   id bigint [pk, increment]
   puesta_en_marcha_id bigint [not null, unique]
@@ -229,9 +213,9 @@ Table resumen_produccion {
   cantidad_total_fallada bigint [not null]
   cantidad_esperada bigint [null]
   tasa_defectos_promedio numeric [null]
-  tiempo_marcha_segundos bigint [not null, note: "sum(puesta_en_marcha.duracion)"]
-  tiempo_muerto_total_segundos bigint [default: 0, note: "sum(tiempo_muerto.duracion_segundos)"]
-  eficiencia_produccion numeric [null, note: "cantidad_producida / cantidad_esperada * 100"]
+  tiempo_marcha_segundos bigint [not null, note: "duracion puesta_en_marcha: ts_fin - ts_inicio"]
+  tasa_defectos_pct numeric [null]
+  eficiencia_produccion numeric [null, note: "cantidad_total_producida / cantidad_esperada * 100"]
   creado_en timestamp [default: "now()"]
   actualizado_en timestamp
   indexes {
@@ -420,8 +404,6 @@ Ref: puesta_en_marcha.jornada_id > jornada.id
 Ref: puesta_en_marcha.maquina_id > maquina.id
 Ref: produccion_detalle.puesta_en_marcha_id > puesta_en_marcha.id
 Ref: produccion_detalle.maquina_id > maquina.id
-Ref: tiempo_muerto.puesta_en_marcha_id > puesta_en_marcha.id
-Ref: tiempo_muerto.maquina_id > maquina.id
 Ref: resumen_produccion.puesta_en_marcha_id > puesta_en_marcha.id
 Ref: resumen_produccion.maquina_id > maquina.id
 Ref: resumen_produccion.jornada_id > jornada.id
@@ -555,19 +537,6 @@ Mediciones granulares de producción (cada X segundos, enviadas por la máquina)
 - **Ejemplo**: A las 06:32:15, máquina reporta: 125 producidas, 123 buenas, 2 falladas (1.6% defectuosa).
 - **Particionado**: Recomendado por `ts` (TimescaleDB).
 
-#### `tiempo_muerto`
-Registro de paradas/pausas dentro de una puesta en marcha (downtime).
-- **Campos clave**: 
-  - `puesta_en_marcha_id` (FK).
-  - `maquina_id` (FK).
-  - `ts_inicio`: Cuándo empezó la parada.
-  - `ts_fin`: Cuándo se reanudó (null si sigue parada).
-  - `razon`: Motivo ('falta_material', 'cambio_formato', 'mantenimiento', 'falla').
-  - `duracion_segundos`: Calculado (ts_fin - ts_inicio).
-  - `descripcion`: Detalles adicionales.
-- **Ejemplo**: Parada de 07:45 a 08:10 por "cambio de formato" (25 min de downtime).
-- **Uso**: Analizar causas de paros y calcular OEE (disponibilidad descontando downtime).
-
 #### `resumen_produccion`
 Agregado de toda la producción de una puesta en marcha (snapshot).
 - **Campos clave**: 
@@ -578,10 +547,10 @@ Agregado de toda la producción de una puesta en marcha (snapshot).
   - `cantidad_total_fallada`: Sum de produccion_detalle.cantidad_fallada.
   - `cantidad_esperada`: Del puesta_en_marcha.
   - `tasa_defectos_promedio`: (cantidad_total_fallada / cantidad_total_producida) * 100.
-  - `tiempo_marcha_segundos`: Duración activa = (ts_fin - ts_inicio) - tiempo_muerto_total.
-  - `tiempo_muerto_total_segundos`: Sum de tiempo_muerto.duracion_segundos.
+  - `tiempo_marcha_segundos`: Duración = (ts_fin - ts_inicio).
   - `eficiencia_produccion`: (cantidad_total_producida / cantidad_esperada) * 100.
-- **Ejemplo**: Puesta en marcha de 06:30-09:15 → 2250 producidas, 2205 buenas, 45 falladas, 0 downtime → 100% eficiencia.
+- **Nota**: Disponibilidad se calcula dinámicamente consultando `registro_mantenimiento` para descontar tiempo de mantenimiento.
+- **Ejemplo**: Puesta en marcha de 06:30-09:15 → 2250 producidas, 2205 buenas, 45 falladas → 100% eficiencia.
 - **Uso**: Cálculo rápido de KPIs sin agregaciones complejas; útil para dashboards.
 
 ---
@@ -1054,43 +1023,7 @@ VALUES
 
 ---
 
-### **Caso de Uso 9: Registrar Tiempo Muerto (Paradas/Downtime)**
-
-**Contexto**: Máquina se detiene por motivos (falta material, cambio, mantenimiento) y supervisoregistra la causa.
-
-**Flujo**:
-1. Supervisor nota que la máquina se detiene a las 07:45:
-
-```sql
--- PASO 1: Registrar inicio de parada
-INSERT INTO tiempo_muerto 
-  (puesta_en_marcha_id, maquina_id, ts_inicio, razon, descripcion)
-VALUES 
-  (1000, 5, '2025-11-13 07:45:00'::timestamp, 'cambio_formato', 'Cambio de molde para formato XL');
--- Resultado: id = 5000
-
--- PASO 2: Cuando máquina se reanuda a las 08:10, actualizar fin_ts
-UPDATE tiempo_muerto 
-SET 
-  ts_fin = '2025-11-13 08:10:00'::timestamp,
-  duracion_segundos = EXTRACT(EPOCH FROM ('2025-11-13 08:10:00'::timestamp - '2025-11-13 07:45:00'::timestamp))::int
-WHERE id = 5000;
--- duracion_segundos = 1500 (25 minutos)
-
--- PASO 3: Dashboard muestra acumulado de downtime
--- SELECT SUM(duracion_segundos) FROM tiempo_muerto 
---   WHERE puesta_en_marcha_id = 1000 AND ts_fin IS NOT NULL;
--- Resultado: 1500 segundos (25 min) de parada registrada
-```
-
-**Resultado**:
-- Tiempo muerto registrado y cuantificado.
-- Causa documentada para análisis.
-- Disponibilidad real calculable: (tiempo_marcha - tiempo_muerto) / tiempo_total.
-
----
-
-### **Caso de Uso 10: Calcular Resumen de Producción al Finalizar Puesta en Marcha**
+### **Caso de Uso 9: Calcular Resumen de Producción al Finalizar Puesta en Marcha**
 
 **Contexto**: Cuando puesta_en_marcha finaliza, agregar todos los datos en resumen_produccion para KPIs rápidos.
 
@@ -1116,30 +1049,31 @@ FROM produccion_detalle
 WHERE puesta_en_marcha_id = 1000;
 -- Resultado: 2250 producidas, 2205 buenas, 45 falladas, 2.0% defectos
 
--- PASO 3: Obtener tiempo muerto total
+-- PASO 3: Calcular disponibilidad desde registro_mantenimiento
+-- La disponibilidad se calcula dinámicamente consultando mantenimientos
 SELECT 
-  COALESCE(SUM(duracion_segundos), 0) as tiempo_muerto_total
-FROM tiempo_muerto
-WHERE puesta_en_marcha_id = 1000
-  AND ts_fin IS NOT NULL;
--- Resultado: 1500 segundos (25 minutos)
+  COALESCE(SUM(EXTRACT(EPOCH FROM (COALESCE(fin_ts, now()) - inicio_ts))) / 3600, 0) as horas_mantenimiento
+FROM registro_mantenimiento
+WHERE maquina_id = 5
+  AND inicio_ts BETWEEN '2025-11-13 06:30:00' AND '2025-11-13 09:15:00';
+-- Resultado: 0.42 horas (25 minutos de mantenimiento)
 
 -- PASO 4: Insertar resumen (snapshot)
 INSERT INTO resumen_produccion 
   (puesta_en_marcha_id, maquina_id, jornada_id, cantidad_total_producida, 
    cantidad_total_buena, cantidad_total_fallada, cantidad_esperada, 
-   tasa_defectos_promedio, tiempo_marcha_segundos, tiempo_muerto_total_segundos, 
-   eficiencia_produccion)
+   tasa_defectos_promedio, tiempo_marcha_segundos, eficiencia_produccion)
 VALUES 
-  (1000, 5, 100, 2250, 2205, 45, 2500, 2.0, 9900, 1500, 
+  (1000, 5, 100, 2250, 2205, 45, 2500, 2.0, 9900, 
    (2250::numeric / 2500 * 100));
--- tiempo_marcha = 09:15 - 06:30 - 25min downtime = 165 - 25 = 140 min = 8400 sec
+-- tiempo_marcha = 09:15 - 06:30 = 165 minutos = 9900 sec (sin resta de mantenimiento)
 -- eficiencia = 2250 / 2500 * 100 = 90%
 
 -- PASO 5: Crear KPIs derivados de esta sesión
 -- KC1: Tasa de Defectos = 2.0% (alert si > 5%)
 -- KC2: Eficiencia de Producción = 90% (alert si < 80%)
--- KC3: Disponibilidad = (8400 sec / 9900 sec) * 100 = 84.8%
+-- KC3: Disponibilidad = (horas_produccion) / (24 - horas_mantenimiento) * 100
+--      donde horas_mantenimiento se consulta dinámicamente de registro_mantenimiento
 ```
 
 **Resultado**:
@@ -1160,7 +1094,6 @@ CREATE INDEX idx_medicion_sensor_calidad ON medicion(sensor_id, calidad_dato);
 -- Índices de Rendimiento (PRODUCCIÓN)
 CREATE INDEX idx_produccion_detalle_puesta_ts ON produccion_detalle(puesta_en_marcha_id, ts DESC);
 CREATE INDEX idx_produccion_detalle_maquina_ts ON produccion_detalle(maquina_id, ts DESC);
-CREATE INDEX idx_tiempo_muerto_puesta_ts ON tiempo_muerto(puesta_en_marcha_id, ts_inicio DESC);
 CREATE INDEX idx_resumen_produccion_maquina_fecha ON resumen_produccion(maquina_id, creado_en DESC);
 CREATE INDEX idx_jornada_maquina_ts ON jornada(maquina_id, ts_inicio DESC);
 CREATE INDEX idx_cambio_operador_jornada_ts ON cambio_operador_jornada(jornada_id, ts_cambio DESC);
@@ -1218,10 +1151,6 @@ CREATE UNIQUE INDEX uq_resumen_produccion_puesta ON resumen_produccion(puesta_en
 ### `jornada`
 - **Retención**: 24 meses (pocos registros).
 - **Archivo**: Mantener para correlación con producción.
-
-### `tiempo_muerto`
-- **Retención**: 24 meses.
-- **Análisis**: Revisar mensualmente para identificar tendencias de downtime.
 
 ### `valor_kpi`
 - **Retención**: 24 meses (snapshots son menos voluminosos).
