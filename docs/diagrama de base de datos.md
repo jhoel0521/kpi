@@ -6,6 +6,7 @@
 - [Descripción de Tablas](#descripción-de-tablas)
   - [Grupo 1: Gestión de Activos](#grupo-1-gestión-de-activos)
   - [Grupo 2: Ingesta de Datos](#grupo-2-ingesta-de-datos)
+  - [Grupo 2.1: Producción y Jornadas](#grupo-21-producción-y-jornadas)
   - [Grupo 3: Configuración de KPI](#grupo-3-configuración-de-kpi)
   - [Grupo 4: Valores y Snapshots](#grupo-4-valores-y-snapshots)
   - [Grupo 5: Alertas y Eventos](#grupo-5-alertas-y-eventos)
@@ -21,7 +22,9 @@
 
 Este diseño de base de datos soporta un sistema KPI industrial con:
 - **Ingesta en tiempo real** (mediciones de sensores vía HTTP + cola de tareas).
-- **Cálculo de KPIs** (agregaciones periódicas o streaming).
+- **Medición de producción por jornadas** (turnos, puestas en marcha, cantidad producida/buena/fallada).
+- **Control de tiempo muerto** (registro de pausas y sus causas).
+- **Cálculo de KPIs** (agregaciones periódicas o streaming, incluyendo eficiencia de producción).
 - **Alertas y notificaciones** (reglas condicionales con múltiples canales).
 - **Auditoría completa** (trazabilidad de cambios críticos).
 - **Gestión de activos** (máquinas, sensores, líneas de producción).
@@ -127,6 +130,114 @@ Table error_ingesta {
   mensaje_error text
   payload_recibido jsonb [null, note: "DLQ - Dead Letter Queue"]
   timestamp_error timestamp [default: "now()"]
+}
+
+// ====================================
+// GRUPO 2.1: PRODUCCIÓN Y JORNADAS
+// ====================================
+Table jornada {
+  id bigint [pk, increment]
+  maquina_id bigint [not null]
+  nombre varchar [not null, note: "Día, Noche, Madrugada, Custom"]
+  ts_inicio timestamp [not null, note: "cuándo INICIO la jornada (puede cruzar días)"]
+  ts_fin timestamp [null, note: "cuándo TERMINO la jornada"]
+  operador_id_inicio bigint [not null, note: "quién inició la jornada"]
+  operador_id_actual bigint [null, note: "operador actual (puede cambiar)"]
+  cantidad_producida_esperada bigint [null, note: "meta de la jornada completa"]
+  estado varchar [default: "'activa'", note: "activa, completada, cancelada"]
+  notas text [null]
+  creado_en timestamp [default: "now()"]
+  actualizado_en timestamp
+  indexes {
+    (maquina_id, ts_inicio) [type: btree]
+    (ts_inicio, ts_fin) [type: btree]
+  }
+}
+
+Table cambio_operador_jornada {
+  id bigint [pk, increment]
+  jornada_id bigint [not null]
+  operador_anterior_id bigint [null, note: "quién estaba antes (puede ser null)"]
+  operador_nuevo_id bigint [not null, note: "quién asume ahora"]
+  ts_cambio timestamp [default: "now()", note: "cuándo se realizó el cambio"]
+  razon varchar [null, note: "cambio de turno, descanso, relevo, etc"]
+  notas text [null]
+  creado_por bigint [null, note: "supervisor o admin que registró el cambio"]
+  creado_en timestamp [default: "now()"]
+  indexes {
+    (jornada_id, ts_cambio) [type: btree]
+  }
+}
+
+Table puesta_en_marcha {
+  id bigint [pk, increment]
+  jornada_id bigint [not null]
+  maquina_id bigint [not null]
+  ts_inicio timestamp [not null, note: "cuándo arrancó la máquina"]
+  ts_fin timestamp [null, note: "cuándo paró la máquina"]
+  estado varchar [default: "'en_marcha'", note: "en_marcha, parada, finalizada"]
+  cantidad_producida_esperada bigint [null, note: "meta definida por gerencia"]
+  creado_en timestamp [default: "now()"]
+  actualizado_en timestamp
+  indexes {
+    (jornada_id, ts_inicio) [type: btree]
+    (maquina_id, ts_inicio) [type: btree]
+  }
+}
+
+Table produccion_detalle {
+  id bigint [pk, increment]
+  puesta_en_marcha_id bigint [not null]
+  maquina_id bigint [not null]
+  ts timestamp [not null, note: "timestamp del reporte de producción"]
+  cantidad_producida bigint [not null, note: "total producido en este intervalo"]
+  cantidad_buena bigint [not null, note: "cantidad en buen estado"]
+  cantidad_fallada bigint [not null, note: "cantidad fallida/rechazada"]
+  tasa_defectos numeric [null, note: "cantidad_fallada / cantidad_producida * 100"]
+  payload_raw jsonb [null, note: "datos adicionales del equipo"]
+  creado_en timestamp [default: "now()"]
+  indexes {
+    (puesta_en_marcha_id, ts) [type: btree]
+    (maquina_id, ts) [type: btree]
+    (ts) [type: btree]
+  }
+}
+
+Table tiempo_muerto {
+  id bigint [pk, increment]
+  puesta_en_marcha_id bigint [not null]
+  maquina_id bigint [not null]
+  ts_inicio timestamp [not null, note: "cuándo empezó la parada"]
+  ts_fin timestamp [null, note: "cuándo se reanudó"]
+  razon varchar [not null, note: "falta_material, cambio_formato, mantenimiento, falla"]
+  duracion_segundos int [null, note: "calculado: ts_fin - ts_inicio"]
+  descripcion text [null]
+  creado_en timestamp [default: "now()"]
+  actualizado_en timestamp
+  indexes {
+    (puesta_en_marcha_id, ts_inicio) [type: btree]
+  }
+}
+
+Table resumen_produccion {
+  id bigint [pk, increment]
+  puesta_en_marcha_id bigint [not null, unique]
+  maquina_id bigint [not null]
+  jornada_id bigint [not null]
+  cantidad_total_producida bigint [not null]
+  cantidad_total_buena bigint [not null]
+  cantidad_total_fallada bigint [not null]
+  cantidad_esperada bigint [null]
+  tasa_defectos_promedio numeric [null]
+  tiempo_marcha_segundos bigint [not null, note: "sum(puesta_en_marcha.duracion)"]
+  tiempo_muerto_total_segundos bigint [default: 0, note: "sum(tiempo_muerto.duracion_segundos)"]
+  eficiencia_produccion numeric [null, note: "cantidad_producida / cantidad_esperada * 100"]
+  creado_en timestamp [default: "now()"]
+  actualizado_en timestamp
+  indexes {
+    (maquina_id, creado_en) [type: btree]
+    (jornada_id) [type: btree]
+  }
 }
 
 // ====================================
@@ -298,6 +409,22 @@ Ref: sensor.maquina_id > maquina.id
 Ref: fuente_datos.sensor_id > sensor.id
 Ref: medicion.sensor_id > sensor.id
 Ref: error_ingesta.fuente_datos_id > fuente_datos.id
+Ref: jornada.maquina_id > maquina.id
+Ref: jornada.operador_id_inicio > usuario.id
+Ref: jornada.operador_id_actual > usuario.id
+Ref: cambio_operador_jornada.jornada_id > jornada.id
+Ref: cambio_operador_jornada.operador_anterior_id > usuario.id
+Ref: cambio_operador_jornada.operador_nuevo_id > usuario.id
+Ref: cambio_operador_jornada.creado_por > usuario.id
+Ref: puesta_en_marcha.jornada_id > jornada.id
+Ref: puesta_en_marcha.maquina_id > maquina.id
+Ref: produccion_detalle.puesta_en_marcha_id > puesta_en_marcha.id
+Ref: produccion_detalle.maquina_id > maquina.id
+Ref: tiempo_muerto.puesta_en_marcha_id > puesta_en_marcha.id
+Ref: tiempo_muerto.maquina_id > maquina.id
+Ref: resumen_produccion.puesta_en_marcha_id > puesta_en_marcha.id
+Ref: resumen_produccion.maquina_id > maquina.id
+Ref: resumen_produccion.jornada_id > jornada.id
 Ref: definicion_kpi.usuario_creador_id > usuario.id
 Ref: instancia_kpi.definicion_kpi_id > definicion_kpi.id
 Ref: instancia_kpi.maquina_id > maquina.id
@@ -368,6 +495,94 @@ Registro de errores durante la ingesta de mediciones.
 - **Uso**: DLQ (Dead Letter Queue) para mensajes rechazados.
 - **Campos clave**: `fuente_datos_id`, `codigo_error`, `payload_recibido` (JSON).
 - **Auditoría**: Revisar periódicamente para ajustar parsers o validaciones.
+
+---
+
+### GRUPO 2.1: Producción y Jornadas
+
+#### `jornada`
+Define una sesión de trabajo de una máquina (puede ser turno o jornada personalizada, y puede cruzar días).
+- **Campos clave**: 
+  - `maquina_id` (FK).
+  - `nombre`: Turno ('Día', 'Noche', 'Madrugada') o nombre personalizado.
+  - `ts_inicio`: Timestamp de INICIO (ej: 2024-12-20 20:00:00).
+  - `ts_fin`: Timestamp de FIN (ej: 2024-12-21 01:00:00 → cruza a día siguiente).
+  - `operador_id_inicio`: Quién inició la jornada (obligatorio, auditoría).
+  - `operador_id_actual`: Operador actual (puede cambiar durante la jornada).
+  - `cantidad_producida_esperada`: Meta para toda la jornada.
+  - `estado`: 'activa', 'completada', 'cancelada'.
+- **Ejemplo**: Máquina 5, "Noche", inicio 2024-12-20 20:00, fin 2024-12-21 01:00 (5 horas), operador Juan.
+- **Uso**: Agrupar puestas en marcha, producción y cambios de responsables dentro de un período extendido.
+- **Cambios de Responsables**: Registrados en tabla `cambio_operador_jornada` para auditoría completa.
+
+#### `cambio_operador_jornada`
+Registro de cambios de operadores/responsables durante una jornada.
+- **Campos clave**: 
+  - `jornada_id` (FK).
+  - `operador_anterior_id`: Quién estaba antes (null si es el primer operador).
+  - `operador_nuevo_id`: Quién asume (obligatorio).
+  - `ts_cambio`: Timestamp exacto del cambio.
+  - `razon`: Motivo ('cambio_turno', 'descanso', 'relevo', 'ausencia', etc).
+  - `creado_por`: Supervisor/admin que registró el cambio.
+- **Ejemplo**: Jornada noche 2024-12-20 20:00 inicio con Juan. A las 23:45, Juan sale y entra María por relevo → fila en cambio_operador_jornada.
+- **Uso**: Trazabilidad completa de quién operó máquina en cada momento. Impacta auditoría y KPIs por operador.
+- **Auditoría**: Quién hizo el cambio (creado_por) y cuándo se registró.
+
+#### `puesta_en_marcha`
+Sesión de producción dentro de una jornada (cada vez que la máquina arranca y se detiene).
+- **Campos clave**: 
+  - `jornada_id` (FK).
+  - `maquina_id` (FK).
+  - `ts_inicio`: Timestamp de arranque.
+  - `ts_fin`: Timestamp de parada (null si está activa).
+  - `cantidad_producida_esperada`: Meta definida por gerencia para esta sesión.
+  - `estado`: 'en_marcha', 'parada', 'finalizada'.
+- **Ejemplo**: Producción de 06:30 a 09:15 (duracion: 2h 45m).
+- **Uso**: Bucket temporal para agrupar mediciones y cálculo de eficiencia.
+
+#### `produccion_detalle`
+Mediciones granulares de producción (cada X segundos, enviadas por la máquina).
+- **Campos clave**: 
+  - `puesta_en_marcha_id` (FK).
+  - `maquina_id` (FK).
+  - `ts`: Timestamp de la medición.
+  - `cantidad_producida`: Unidades producidas en este intervalo.
+  - `cantidad_buena`: Unidades en buen estado.
+  - `cantidad_fallada`: Unidades rechazadas/defectuosas.
+  - `tasa_defectos`: Calculada como (cantidad_fallada / cantidad_producida) * 100.
+  - `payload_raw`: JSON con datos adicionales del equipo (presión, temperatura, etc.).
+- **Índices**: `(puesta_en_marcha_id, ts)`, `(maquina_id, ts)` para queries rápidas.
+- **Ejemplo**: A las 06:32:15, máquina reporta: 125 producidas, 123 buenas, 2 falladas (1.6% defectuosa).
+- **Particionado**: Recomendado por `ts` (TimescaleDB).
+
+#### `tiempo_muerto`
+Registro de paradas/pausas dentro de una puesta en marcha (downtime).
+- **Campos clave**: 
+  - `puesta_en_marcha_id` (FK).
+  - `maquina_id` (FK).
+  - `ts_inicio`: Cuándo empezó la parada.
+  - `ts_fin`: Cuándo se reanudó (null si sigue parada).
+  - `razon`: Motivo ('falta_material', 'cambio_formato', 'mantenimiento', 'falla').
+  - `duracion_segundos`: Calculado (ts_fin - ts_inicio).
+  - `descripcion`: Detalles adicionales.
+- **Ejemplo**: Parada de 07:45 a 08:10 por "cambio de formato" (25 min de downtime).
+- **Uso**: Analizar causas de paros y calcular OEE (disponibilidad descontando downtime).
+
+#### `resumen_produccion`
+Agregado de toda la producción de una puesta en marcha (snapshot).
+- **Campos clave**: 
+  - `puesta_en_marcha_id` (FK, UNIQUE).
+  - `maquina_id`, `jornada_id` (FKs para queries rápidas).
+  - `cantidad_total_producida`: Sum de produccion_detalle.cantidad_producida.
+  - `cantidad_total_buena`: Sum de produccion_detalle.cantidad_buena.
+  - `cantidad_total_fallada`: Sum de produccion_detalle.cantidad_fallada.
+  - `cantidad_esperada`: Del puesta_en_marcha.
+  - `tasa_defectos_promedio`: (cantidad_total_fallada / cantidad_total_producida) * 100.
+  - `tiempo_marcha_segundos`: Duración activa = (ts_fin - ts_inicio) - tiempo_muerto_total.
+  - `tiempo_muerto_total_segundos`: Sum de tiempo_muerto.duracion_segundos.
+  - `eficiencia_produccion`: (cantidad_total_producida / cantidad_esperada) * 100.
+- **Ejemplo**: Puesta en marcha de 06:30-09:15 → 2250 producidas, 2205 buenas, 45 falladas, 0 downtime → 100% eficiencia.
+- **Uso**: Cálculo rápido de KPIs sin agregaciones complejas; útil para dashboards.
 
 ---
 
@@ -743,6 +958,197 @@ VALUES
 
 ---
 
+### **Caso de Uso 8: Registrar Producción Detallada (Jornada y Puesta en Marcha)**
+
+**Contexto**: La máquina reporta cada X segundos: cantidad producida, cantidad buena, cantidad fallada.
+
+**Flujo**:
+1. Supervisor inicia jornada (que puede cruzar días):
+
+```sql
+-- PASO 1: Crear jornada que cruza días (20-12-2024 20:00 a 21-12-2024 01:00)
+INSERT INTO jornada (maquina_id, nombre, ts_inicio, operador_id_inicio, operador_id_actual, cantidad_producida_esperada, estado)
+VALUES 
+  (5, 'Noche', '2024-12-20 20:00:00'::timestamp, 1, 1, 3000, 'activa');
+-- Resultado: id = 100
+-- Nota: ts_fin será NULL inicialmente, se actualiza cuando termina
+```
+
+2. Durante la jornada, cambio de operador a las 23:45:
+
+```sql
+-- PASO 2: Registrar cambio de operador (Juan → María)
+INSERT INTO cambio_operador_jornada 
+  (jornada_id, operador_anterior_id, operador_nuevo_id, ts_cambio, razon, creado_por)
+VALUES 
+  (100, 1, 2, '2024-12-20 23:45:00'::timestamp, 'cambio_turno', 10);
+-- Resultado: id = 500
+
+-- PASO 3: Actualizar operador actual en jornada
+UPDATE jornada SET operador_id_actual = 2 WHERE id = 100;
+
+-- PASO 4: Auditoría registra automáticamente quién hizo el cambio
+-- SELECT * FROM bitacora_auditoria WHERE entidad_tipo = 'cambio_operador_jornada' AND entidad_id = 500;
+```
+
+3. Query para auditoría: quién operó máquina en cada momento:
+
+```sql
+-- PASO 5: Historial de operadores de una jornada
+SELECT 
+  j.id as jornada_id,
+  j.ts_inicio,
+  j.ts_fin,
+  u1.nombre as operador_inicio,
+  u2.nombre as operador_actual,
+  coj.operador_anterior_id,
+  u3.nombre as operador_anterior,
+  coj.operador_nuevo_id,
+  u4.nombre as operador_nuevo,
+  coj.ts_cambio,
+  coj.razon
+FROM jornada j
+LEFT JOIN usuario u1 ON j.operador_id_inicio = u1.id
+LEFT JOIN usuario u2 ON j.operador_id_actual = u2.id
+LEFT JOIN cambio_operador_jornada coj ON j.id = coj.jornada_id
+LEFT JOIN usuario u3 ON coj.operador_anterior_id = u3.id
+LEFT JOIN usuario u4 ON coj.operador_nuevo_id = u4.id
+WHERE j.id = 100
+ORDER BY coj.ts_cambio;
+```
+
+**Resultado**:
+- Jornada multi-día registrada (20-12 20:00 a 21-12 01:00).
+- Cambios de operadores auditados.
+- Trazabilidad completa de quién operó en cada período.
+
+2. Máquina arranca y se crea puesta_en_marcha:
+
+```sql
+-- PASO 1 (Continuación): Máquina arranca dentro de la jornada
+INSERT INTO puesta_en_marcha 
+  (jornada_id, maquina_id, ts_inicio, cantidad_producida_esperada, estado)
+VALUES 
+  (100, 5, '2024-12-20 20:30:00'::timestamp, 2500, 'en_marcha');
+-- Resultado: id = 1000
+
+-- PASO 2: Máquina reporta cada 60 segundos
+INSERT INTO produccion_detalle 
+  (puesta_en_marcha_id, maquina_id, ts, cantidad_producida, cantidad_buena, cantidad_fallada, tasa_defectos, payload_raw)
+VALUES 
+  (1000, 5, '2024-12-20 20:31:00'::timestamp, 125, 123, 2, 1.6, '{"velocidad": 450, "presion": 8.5}'),
+  (1000, 5, '2024-12-20 20:32:00'::timestamp, 125, 124, 1, 0.8, '{"velocidad": 450, "presion": 8.4}'),
+  (1000, 5, '2024-12-20 20:33:00'::timestamp, 125, 125, 0, 0.0, '{"velocidad": 450, "presion": 8.5}');
+-- Cada fila = 60 segundos de producción en tiempo real
+
+-- PASO 3: Frontend (Echo) recibe eventos en tiempo real
+-- Backend: ProduccionRegistrada::broadcast(puesta_en_marcha_id, cantidad_producida, cantidad_buena)
+-- Dashboard actualiza: 375 producidas, 372 buenas, 3 falladas, operador = María
+```
+
+**Resultado**:
+- Jornada multi-día registrada con operador inicial y cambios auditados.
+- Puesta en marcha dentro de la jornada.
+- Mediciones granulares en produccion_detalle.
+- Dashboard actualizado en tiempo real vía Echo/Reverb con identificación de operador actual.
+
+---
+
+### **Caso de Uso 9: Registrar Tiempo Muerto (Paradas/Downtime)**
+
+**Contexto**: Máquina se detiene por motivos (falta material, cambio, mantenimiento) y supervisoregistra la causa.
+
+**Flujo**:
+1. Supervisor nota que la máquina se detiene a las 07:45:
+
+```sql
+-- PASO 1: Registrar inicio de parada
+INSERT INTO tiempo_muerto 
+  (puesta_en_marcha_id, maquina_id, ts_inicio, razon, descripcion)
+VALUES 
+  (1000, 5, '2025-11-13 07:45:00'::timestamp, 'cambio_formato', 'Cambio de molde para formato XL');
+-- Resultado: id = 5000
+
+-- PASO 2: Cuando máquina se reanuda a las 08:10, actualizar fin_ts
+UPDATE tiempo_muerto 
+SET 
+  ts_fin = '2025-11-13 08:10:00'::timestamp,
+  duracion_segundos = EXTRACT(EPOCH FROM ('2025-11-13 08:10:00'::timestamp - '2025-11-13 07:45:00'::timestamp))::int
+WHERE id = 5000;
+-- duracion_segundos = 1500 (25 minutos)
+
+-- PASO 3: Dashboard muestra acumulado de downtime
+-- SELECT SUM(duracion_segundos) FROM tiempo_muerto 
+--   WHERE puesta_en_marcha_id = 1000 AND ts_fin IS NOT NULL;
+-- Resultado: 1500 segundos (25 min) de parada registrada
+```
+
+**Resultado**:
+- Tiempo muerto registrado y cuantificado.
+- Causa documentada para análisis.
+- Disponibilidad real calculable: (tiempo_marcha - tiempo_muerto) / tiempo_total.
+
+---
+
+### **Caso de Uso 10: Calcular Resumen de Producción al Finalizar Puesta en Marcha**
+
+**Contexto**: Cuando puesta_en_marcha finaliza, agregar todos los datos en resumen_produccion para KPIs rápidos.
+
+**Flujo**:
+1. Máquina se detiene a las 09:15 (fin de sesión):
+
+```sql
+-- PASO 1: Actualizar puesta_en_marcha con fin
+UPDATE puesta_en_marcha 
+SET 
+  ts_fin = '2025-11-13 09:15:00'::timestamp,
+  estado = 'finalizada'
+WHERE id = 1000;
+
+-- PASO 2: Calcular agregados desde produccion_detalle
+-- Total producido en toda la sesión
+SELECT 
+  SUM(cantidad_producida) as total_producida,
+  SUM(cantidad_buena) as total_buena,
+  SUM(cantidad_fallada) as total_fallada,
+  (SUM(cantidad_fallada)::numeric / SUM(cantidad_producida) * 100) as tasa_defectos_avg
+FROM produccion_detalle
+WHERE puesta_en_marcha_id = 1000;
+-- Resultado: 2250 producidas, 2205 buenas, 45 falladas, 2.0% defectos
+
+-- PASO 3: Obtener tiempo muerto total
+SELECT 
+  COALESCE(SUM(duracion_segundos), 0) as tiempo_muerto_total
+FROM tiempo_muerto
+WHERE puesta_en_marcha_id = 1000
+  AND ts_fin IS NOT NULL;
+-- Resultado: 1500 segundos (25 minutos)
+
+-- PASO 4: Insertar resumen (snapshot)
+INSERT INTO resumen_produccion 
+  (puesta_en_marcha_id, maquina_id, jornada_id, cantidad_total_producida, 
+   cantidad_total_buena, cantidad_total_fallada, cantidad_esperada, 
+   tasa_defectos_promedio, tiempo_marcha_segundos, tiempo_muerto_total_segundos, 
+   eficiencia_produccion)
+VALUES 
+  (1000, 5, 100, 2250, 2205, 45, 2500, 2.0, 9900, 1500, 
+   (2250::numeric / 2500 * 100));
+-- tiempo_marcha = 09:15 - 06:30 - 25min downtime = 165 - 25 = 140 min = 8400 sec
+-- eficiencia = 2250 / 2500 * 100 = 90%
+
+-- PASO 5: Crear KPIs derivados de esta sesión
+-- KC1: Tasa de Defectos = 2.0% (alert si > 5%)
+-- KC2: Eficiencia de Producción = 90% (alert si < 80%)
+-- KC3: Disponibilidad = (8400 sec / 9900 sec) * 100 = 84.8%
+```
+
+**Resultado**:
+- Resumen completo en `resumen_produccion`.
+- KPIs calculados automáticamente y listos para dashboards.
+- Histórico de cada sesión para análisis y reportes.
+
+---
+
 ## Índices Recomendados
 
 ```sql
@@ -750,6 +1156,14 @@ VALUES
 CREATE INDEX idx_medicion_sensor_ts ON medicion(sensor_id, ts DESC);
 CREATE INDEX idx_medicion_ts ON medicion(ts DESC);
 CREATE INDEX idx_medicion_sensor_calidad ON medicion(sensor_id, calidad_dato);
+
+-- Índices de Rendimiento (PRODUCCIÓN)
+CREATE INDEX idx_produccion_detalle_puesta_ts ON produccion_detalle(puesta_en_marcha_id, ts DESC);
+CREATE INDEX idx_produccion_detalle_maquina_ts ON produccion_detalle(maquina_id, ts DESC);
+CREATE INDEX idx_tiempo_muerto_puesta_ts ON tiempo_muerto(puesta_en_marcha_id, ts_inicio DESC);
+CREATE INDEX idx_resumen_produccion_maquina_fecha ON resumen_produccion(maquina_id, creado_en DESC);
+CREATE INDEX idx_jornada_maquina_ts ON jornada(maquina_id, ts_inicio DESC);
+CREATE INDEX idx_cambio_operador_jornada_ts ON cambio_operador_jornada(jornada_id, ts_cambio DESC);
 
 -- Índices de Rendimiento (VALORES KPI)
 CREATE INDEX idx_valor_kpi_instancia_ts ON valor_kpi(instancia_kpi_id, ts DESC);
@@ -770,6 +1184,7 @@ CREATE UNIQUE INDEX uq_usuario_email ON usuario(email);
 CREATE UNIQUE INDEX uq_rol_nombre ON rol(nombre);
 CREATE UNIQUE INDEX uq_permiso_nombre ON permiso(nombre);
 CREATE UNIQUE INDEX uq_maquina_serie ON maquina(serie);
+CREATE UNIQUE INDEX uq_resumen_produccion_puesta ON resumen_produccion(puesta_en_marcha_id);
 ```
 
 ---
@@ -784,6 +1199,29 @@ CREATE UNIQUE INDEX uq_maquina_serie ON maquina(serie);
   SELECT add_compression_policy('medicion', INTERVAL '3 months');
   SELECT add_retention_policy('medicion', INTERVAL '12 months');
   ```
+
+### `produccion_detalle` (Table Particionada por Tiempo)
+- **Retención**: 12 meses (rolling).
+- **Granularidad**: Reportes cada 60 segundos, alto volumen.
+- **Agregación**: Después de 6 meses, comprimir a reportes horarios.
+- **Estrategia TimescaleDB**:
+  ```sql
+  SELECT add_compression_policy('produccion_detalle', INTERVAL '6 months');
+  SELECT add_retention_policy('produccion_detalle', INTERVAL '12 months');
+  ```
+
+### `resumen_produccion`
+- **Retención**: 24 meses (snapshots agregados, bajo volumen).
+- **Uso**: Análisis histórico, reportes gerenciales.
+- **Archiving**: Opcional, mover a tabla histórica anual.
+
+### `jornada`
+- **Retención**: 24 meses (pocos registros).
+- **Archivo**: Mantener para correlación con producción.
+
+### `tiempo_muerto`
+- **Retención**: 24 meses.
+- **Análisis**: Revisar mensualmente para identificar tendencias de downtime.
 
 ### `valor_kpi`
 - **Retención**: 24 meses (snapshots son menos voluminosos).
