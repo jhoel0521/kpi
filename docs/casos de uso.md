@@ -27,7 +27,11 @@
   - **Vistas**: Blade (motor de plantillas de Laravel para renderizado del frontend).
   - **Realtime**: Laravel Reverb (servidor WebSocket para actualizaciones en tiempo real).
   - **Frontend Realtime**: Laravel Echo (librería JavaScript para suscribirse a eventos WebSocket desde el frontend).
-  - **Emulador/Sensores**: Sistema de cola (para buffering y reintentos), envío por HTTP (1 a n, uno a muchos, para redundancia si el sistema se cae).
+  - **Emulador/Sensores**: 
+    - **Sistema de Cola**: Para buffering y reintentos (1 a n, uno a muchos).
+    - **Protocolo**: HTTP con persistencia de mensajes.
+    - **Redundancia**: Si el sistema se cae, los mensajes quedan en cola para reintento automático.
+    - **QoS**: Garantiza entrega con reintentos exponenciales.
 - **Entregable**: Casos de uso priorizados + diagrama PlantUML + mapeo a tablas.
 
 ## Casos de Uso Priorizados
