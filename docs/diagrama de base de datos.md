@@ -36,203 +36,200 @@ Este diseño de base de datos soporta un sistema KPI industrial con:
 
 ## Diagrama Entidad-Relación (DBDiagram)
 
-Copia y pega el siguiente código en [DBDiagram.io](https://dbdiagram.io) para visualizar:
+**📊 Copia y pega el siguiente código en [DBDiagram.io](https://dbdiagram.io) para visualizar el diagrama completo:**
 
 ```dbml
--- ====================================
--- GRUPO 1: GESTIÓN DE ACTIVOS
--- ====================================
+// ====================================
+// GRUPO 1: GESTIÓN DE ACTIVOS
+// ====================================
 Table planta {
   id bigint [pk, increment]
   nombre varchar [not null, unique]
   ubicacion varchar
   pais varchar
-  zona_horaria varchar [default: 'UTC']
-  creado_en timestamp [default: 'CURRENT_TIMESTAMP']
-  actualizado_en timestamp [default: 'CURRENT_TIMESTAMP']
+  zona_horaria varchar [default: "'UTC'", note: "zona horaria"]
+  creado_en timestamp [default: "now()"]
+  actualizado_en timestamp [default: "now()"]
 }
 
 Table linea_produccion {
   id bigint [pk, increment]
-  planta_id bigint [not null, ref: > planta.id]
+  planta_id bigint [not null]
   nombre varchar [not null]
   descripcion text
-  estado varchar [default: 'activa'] -- 'activa', 'parada', 'mantenimiento'
-  creado_en timestamp [default: 'CURRENT_TIMESTAMP']
+  estado varchar [default: "'activa'", note: "activa, parada, mantenimiento"]
+  creado_en timestamp [default: "now()"]
   actualizado_en timestamp
-  eliminado_en timestamp [null]
+  eliminado_en timestamp [null, note: "soft delete"]
 }
 
 Table maquina {
   id bigint [pk, increment]
-  linea_id bigint [not null, ref: > linea_produccion.id]
+  linea_id bigint [not null]
   nombre varchar [not null]
   modelo varchar
   serie varchar [unique]
-  estado varchar [default: 'operativa'] -- 'operativa', 'parada', 'mantenimiento', 'falla'
+  estado varchar [default: "'operativa'", note: "operativa, parada, mantenimiento, falla"]
   locacion varchar
-  creado_en timestamp [default: 'CURRENT_TIMESTAMP']
+  creado_en timestamp [default: "now()"]
   actualizado_en timestamp
   eliminado_en timestamp [null]
 }
 
 Table sensor {
   id bigint [pk, increment]
-  maquina_id bigint [not null, ref: > maquina.id]
+  maquina_id bigint [not null]
   nombre varchar [not null]
-  tipo_sensor varchar [not null] -- 'temperatura', 'presion', 'vibracion', 'rpm', etc.
-  unidad varchar -- 'C', 'bar', 'mm/s', 'rpm'
+  tipo_sensor varchar [not null, note: "temperatura, presion, vibracion, rpm"]
+  unidad varchar [note: "C, bar, mm/s, rpm"]
   rango_min numeric
   rango_max numeric
-  estado varchar [default: 'activo'] -- 'activo', 'inactivo', 'offline'
-  creado_en timestamp [default: 'CURRENT_TIMESTAMP']
+  estado varchar [default: "'activo'", note: "activo, inactivo, offline"]
+  creado_en timestamp [default: "now()"]
   actualizado_en timestamp
   eliminado_en timestamp [null]
 }
 
 Table fuente_datos {
   id bigint [pk, increment]
-  sensor_id bigint [not null, ref: > sensor.id]
+  sensor_id bigint [not null]
   nombre varchar
-  tipo_protocolo varchar [not null] -- 'HTTP', 'MQTT', 'OPC-UA'
+  tipo_protocolo varchar [not null, note: "HTTP, MQTT, OPC-UA"]
   url_endpoint varchar
-  token_autenticacion varchar [encrypted]
+  token_autenticacion varchar [note: "encriptado"]
   frecuencia_muestreo_ms int [default: 1000]
   activo boolean [default: true]
-  creado_en timestamp [default: 'CURRENT_TIMESTAMP']
+  creado_en timestamp [default: "now()"]
   actualizado_en timestamp
 }
 
--- ====================================
--- GRUPO 2: INGESTA DE DATOS
--- ====================================
+// ====================================
+// GRUPO 2: INGESTA DE DATOS
+// ====================================
 Table medicion {
   id bigint [pk, increment]
-  sensor_id bigint [not null, ref: > sensor.id]
-  ts timestamp [not null] -- timestamp de la medición (timestamp sin zona)
+  sensor_id bigint [not null]
+  ts timestamp [not null, note: "timestamp sin zona"]
   valor numeric [not null]
-  calidad_dato varchar [default: 'buena'] -- 'buena', 'sospechosa', 'mala', 'faltante'
+  calidad_dato varchar [default: "'buena'", note: "buena, sospechosa, mala, faltante"]
   payload_raw jsonb [null]
-  creado_en timestamp [default: 'CURRENT_TIMESTAMP']
-
+  creado_en timestamp [default: "now()"]
   indexes {
-    (sensor_id, ts) [name: 'idx_medicion_sensor_ts']
-    (ts) [name: 'idx_medicion_ts']
+    (sensor_id, ts) [type: btree]
+    (ts) [type: btree]
   }
 }
 
--- Tabla para rastrear errores de ingesta
 Table error_ingesta {
   id bigint [pk, increment]
-  fuente_datos_id bigint [ref: > fuente_datos.id]
+  fuente_datos_id bigint
   codigo_error varchar
   mensaje_error text
-  payload_recibido jsonb [null]
-  timestamp_error timestamp [default: 'CURRENT_TIMESTAMP']
+  payload_recibido jsonb [null, note: "DLQ - Dead Letter Queue"]
+  timestamp_error timestamp [default: "now()"]
 }
 
--- ====================================
--- GRUPO 3: CONFIGURACIÓN DE KPI
--- ====================================
+// ====================================
+// GRUPO 3: CONFIGURACIÓN DE KPI
+// ====================================
 Table definicion_kpi {
   id bigint [pk, increment]
-  codigo varchar [unique, not null]
+  codigo varchar [unique, not null, note: "OEE, MTBF, etc"]
   nombre varchar [not null]
   descripcion text
-  formula varchar [not null] -- ej: 'avg(valor)', 'sum(valor)', etc.
-  tipo_agregacion varchar [default: 'avg'] -- 'avg', 'sum', 'max', 'min', 'count'
-  ventana_segundos int [default: 300] -- ventana de cálculo (5 min)
-  unidad_salida varchar -- 'unidades/h', '%', 'ppm', etc.
+  formula varchar [not null, note: "avg(valor), sum(valor)"]
+  tipo_agregacion varchar [default: "'avg'", note: "avg, sum, max, min, count"]
+  ventana_segundos int [default: 300, note: "5 minutos por defecto"]
+  unidad_salida varchar [note: "unidades/h, %, ppm"]
   version int [default: 1]
   activa boolean [default: true]
-  creado_en timestamp [default: 'CURRENT_TIMESTAMP']
+  creado_en timestamp [default: "now()"]
   actualizado_en timestamp
-  usuario_creador_id bigint [ref: > usuario.id]
+  usuario_creador_id bigint
 }
 
 Table instancia_kpi {
   id bigint [pk, increment]
-  definicion_kpi_id bigint [not null, ref: > definicion_kpi.id]
-  maquina_id bigint [null, ref: > maquina.id] -- si es null, aplicar a línea/planta
-  linea_id bigint [null, ref: > linea_produccion.id]
-  planta_id bigint [null, ref: > planta.id]
+  definicion_kpi_id bigint [not null]
+  maquina_id bigint [null, note: "si null, aplicar a linea/planta"]
+  linea_id bigint [null]
+  planta_id bigint [null]
   nombre varchar [not null]
   umbral_minimo numeric [null]
   umbral_maximo numeric [null]
   activa boolean [default: true]
-  creado_en timestamp [default: 'CURRENT_TIMESTAMP']
+  creado_en timestamp [default: "now()"]
   actualizado_en timestamp
   eliminado_en timestamp [null]
 }
 
--- ====================================
--- GRUPO 4: VALORES Y SNAPSHOTS
--- ====================================
+// ====================================
+// GRUPO 4: VALORES Y SNAPSHOTS
+// ====================================
 Table valor_kpi {
   id bigint [pk, increment]
-  instancia_kpi_id bigint [not null, ref: > instancia_kpi.id]
+  instancia_kpi_id bigint [not null]
   ts timestamp [not null]
   valor numeric [not null]
-  calidad varchar [default: 'buena'] -- 'buena', 'incompleta', 'fuera_rango'
-  creado_en timestamp [default: 'CURRENT_TIMESTAMP']
-
+  calidad varchar [default: "'buena'", note: "buena, incompleta, fuera_rango"]
+  creado_en timestamp [default: "now()"]
   indexes {
-    (instancia_kpi_id, ts) [name: 'idx_valor_kpi_instancia_ts']
-    (ts) [name: 'idx_valor_kpi_ts']
+    (instancia_kpi_id, ts) [type: btree]
+    (ts) [type: btree]
   }
 }
 
--- ====================================
--- GRUPO 5: ALERTAS Y EVENTOS
--- ====================================
+// ====================================
+// GRUPO 5: ALERTAS Y EVENTOS
+// ====================================
 Table regla_alerta {
   id bigint [pk, increment]
-  instancia_kpi_id bigint [not null, ref: > instancia_kpi.id]
+  instancia_kpi_id bigint [not null]
   nombre varchar [not null]
-  condicion varchar [not null] -- ej: 'valor > umbral_maximo'
-  canales_notificacion jsonb [not null] -- ['email', 'slack', 'sms']
+  condicion varchar [not null, note: "valor > umbral_maximo"]
+  canales_notificacion jsonb [not null, note: "[email, slack, sms]"]
   activa boolean [default: true]
-  debounce_segundos int [default: 60]
-  creado_en timestamp [default: 'CURRENT_TIMESTAMP']
+  debounce_segundos int [default: 60, note: "evitar ruido"]
+  creado_en timestamp [default: "now()"]
   actualizado_en timestamp
 }
 
 Table evento_alerta {
   id bigint [pk, increment]
-  regla_alerta_id bigint [not null, ref: > regla_alerta.id]
-  instancia_kpi_id bigint [not null, ref: > instancia_kpi.id]
+  regla_alerta_id bigint [not null]
+  instancia_kpi_id bigint [not null]
   ts_ocurrencia timestamp [not null]
   valor_disparador numeric
-  estado varchar [default: 'abierta'] -- 'abierta', 'reconocida', 'cerrada'
+  estado varchar [default: "'abierta'", note: "abierta, reconocida, cerrada"]
   payload jsonb [null]
-  creado_en timestamp [default: 'CURRENT_TIMESTAMP']
+  creado_en timestamp [default: "now()"]
   actualizado_en timestamp
 }
 
 Table notificacion_enviada {
   id bigint [pk, increment]
-  evento_alerta_id bigint [not null, ref: > evento_alerta.id]
-  canal varchar [not null] -- 'email', 'slack', 'sms'
+  evento_alerta_id bigint [not null]
+  canal varchar [not null, note: "email, slack, sms"]
   destinatario varchar
-  estado_envio varchar [default: 'pendiente'] -- 'pendiente', 'enviada', 'falla'
-  intentos int [default: 0]
+  estado_envio varchar [default: "'pendiente'", note: "pendiente, enviada, falla"]
+  intentos int [default: 0, note: "reintentos con backoff exponencial"]
   error_mensaje text [null]
   ts_envio timestamp [null]
-  creado_en timestamp [default: 'CURRENT_TIMESTAMP']
+  creado_en timestamp [default: "now()"]
 }
 
--- ====================================
--- GRUPO 6: GESTIÓN DE USUARIOS
--- ====================================
+// ====================================
+// GRUPO 6: GESTIÓN DE USUARIOS
+// ====================================
 Table usuario {
   id bigint [pk, increment]
   nombre varchar [not null]
   email varchar [unique, not null]
-  password_hash varchar [not null]
+  password_hash varchar [not null, note: "bcrypt hasheado"]
   autenticacion_2fa_activa boolean [default: false]
   ultimo_login timestamp [null]
   activo boolean [default: true]
-  creado_en timestamp [default: 'CURRENT_TIMESTAMP']
+  creado_en timestamp [default: "now()"]
   actualizado_en timestamp
   eliminado_en timestamp [null]
 }
@@ -241,70 +238,83 @@ Table rol {
   id bigint [pk, increment]
   nombre varchar [unique, not null]
   descripcion text
-  creado_en timestamp [default: 'CURRENT_TIMESTAMP']
+  creado_en timestamp [default: "now()"]
 }
 
 Table usuario_rol {
-  usuario_id bigint [not null, ref: > usuario.id]
-  rol_id bigint [not null, ref: > rol.id]
-  creado_en timestamp [default: 'CURRENT_TIMESTAMP']
-
-  indexes {
-    (usuario_id, rol_id) [pk]
-  }
+  usuario_id bigint [not null, pk]
+  rol_id bigint [not null, pk]
+  creado_en timestamp [default: "now()"]
 }
 
 Table permiso {
   id bigint [pk, increment]
   nombre varchar [unique, not null]
   descripcion text
-  modulo varchar [not null] -- 'kpi', 'alertas', 'activos', 'usuarios'
-  creado_en timestamp [default: 'CURRENT_TIMESTAMP']
+  modulo varchar [not null, note: "kpi, alertas, activos, usuarios"]
+  creado_en timestamp [default: "now()"]
 }
 
 Table rol_permiso {
-  rol_id bigint [not null, ref: > rol.id]
-  permiso_id bigint [not null, ref: > permiso.id]
-  creado_en timestamp [default: 'CURRENT_TIMESTAMP']
-
-  indexes {
-    (rol_id, permiso_id) [pk]
-  }
+  rol_id bigint [not null, pk]
+  permiso_id bigint [not null, pk]
+  creado_en timestamp [default: "now()"]
 }
 
--- ====================================
--- GRUPO 7: AUDITORÍA
--- ====================================
+// ====================================
+// GRUPO 7: AUDITORÍA
+// ====================================
 Table registro_mantenimiento {
   id bigint [pk, increment]
-  maquina_id bigint [not null, ref: > maquina.id]
-  tipo_mantenimiento varchar [not null] -- 'correctivo', 'preventivo'
+  maquina_id bigint [not null]
+  tipo_mantenimiento varchar [not null, note: "correctivo, preventivo"]
   inicio_ts timestamp [not null]
   fin_ts timestamp [null]
   descripcion text
-  usuario_id bigint [ref: > usuario.id]
-  creado_en timestamp [default: 'CURRENT_TIMESTAMP']
+  usuario_id bigint
+  creado_en timestamp [default: "now()"]
   actualizado_en timestamp
 }
 
 Table bitacora_auditoria {
   id bigint [pk, increment]
-  usuario_id bigint [null, ref: > usuario.id]
-  entidad_tipo varchar [not null] -- 'definicion_kpi', 'regla_alerta', 'maquina', etc.
+  usuario_id bigint
+  entidad_tipo varchar [not null, note: "definicion_kpi, regla_alerta, maquina"]
   entidad_id bigint [not null]
-  accion varchar [not null] -- 'crear', 'actualizar', 'eliminar'
+  accion varchar [not null, note: "crear, actualizar, eliminar"]
   cambios_anteriores jsonb [null]
   cambios_nuevos jsonb [null]
   razon_cambio varchar [null]
-  timestamp_cambio timestamp [default: 'CURRENT_TIMESTAMP']
+  timestamp_cambio timestamp [default: "now()"]
   ip_origen varchar [null]
-
-  indexes {
-    (entidad_tipo, entidad_id) [name: 'idx_bitacora_entidad']
-    (usuario_id, timestamp_cambio) [name: 'idx_bitacora_usuario_ts']
-    (timestamp_cambio) [name: 'idx_bitacora_ts']
-  }
 }
+
+// ====================================
+// RELACIONES (FOREIGN KEYS)
+// ====================================
+Ref: linea_produccion.planta_id > planta.id
+Ref: maquina.linea_id > linea_produccion.id
+Ref: sensor.maquina_id > maquina.id
+Ref: fuente_datos.sensor_id > sensor.id
+Ref: medicion.sensor_id > sensor.id
+Ref: error_ingesta.fuente_datos_id > fuente_datos.id
+Ref: definicion_kpi.usuario_creador_id > usuario.id
+Ref: instancia_kpi.definicion_kpi_id > definicion_kpi.id
+Ref: instancia_kpi.maquina_id > maquina.id
+Ref: instancia_kpi.linea_id > linea_produccion.id
+Ref: instancia_kpi.planta_id > planta.id
+Ref: valor_kpi.instancia_kpi_id > instancia_kpi.id
+Ref: regla_alerta.instancia_kpi_id > instancia_kpi.id
+Ref: evento_alerta.regla_alerta_id > regla_alerta.id
+Ref: evento_alerta.instancia_kpi_id > instancia_kpi.id
+Ref: notificacion_enviada.evento_alerta_id > evento_alerta.id
+Ref: usuario_rol.usuario_id > usuario.id
+Ref: usuario_rol.rol_id > rol.id
+Ref: rol_permiso.rol_id > rol.id
+Ref: rol_permiso.permiso_id > permiso.id
+Ref: registro_mantenimiento.maquina_id > maquina.id
+Ref: registro_mantenimiento.usuario_id > usuario.id
+Ref: bitacora_auditoria.usuario_id > usuario.id
 ```
 
 ---
@@ -803,4 +813,10 @@ Este diseño proporciona:
 ✅ **Realtime**: Integración con Laravel Reverb + Echo.  
 ✅ **Resiliencia**: Colas de tareas con reintentos, DLQ para errores.  
 
-Para visualizar el diagrama, copia el código SQL anterior en [DBDiagram.io](https://dbdiagram.io).
+---
+
+**Cómo visualizar el diagrama:**
+1. Copia el código DBML de la sección "Diagrama Entidad-Relación"
+2. Abre [DBDiagram.io](https://dbdiagram.io)
+3. Pega el código en el editor
+4. ¡Automáticamente verás el diagrama completo con todas las relaciones!
