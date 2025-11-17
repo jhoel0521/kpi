@@ -13,18 +13,18 @@ Route::get('/user', function (Request $request) {
 })->middleware('auth:sanctum');
 
 // T2.6: Rutas API para operaciones del KPI Dashboard
-Route::middleware('auth:sanctum')->group(function () {
+Route::middleware('auth')->group(function () {
     // POST /api/jornadas (crear jornada)
     Route::post('/jornadas', [JornadaController::class, 'store']);
 
     // POST /api/puestas-en-marcha (iniciar puesta en marcha)
     Route::post('/puestas-en-marcha', [PuestaEnMarchaController::class, 'store']);
 
-    // POST /api/incidencias-parada (registrar parada no planificada)
-    Route::post('/incidencias-parada', [IncidenciaParadaController::class, 'store']);
+    // POST /api/puestas-en-marcha/{puesta_en_marcha}/incidencias-parada (registrar parada no planificada)
+    Route::post('/puestas-en-marcha/{puesta_en_marcha}/incidencias-parada', [IncidenciaParadaController::class, 'store']);
 
-    // POST /api/produccion-detalle (registrar dato de producción)
-    Route::post('/produccion-detalle', [ProduccionController::class, 'storeDetalle']);
+    // POST /api/puestas-en-marcha/{puesta_en_marcha}/produccion-detalle (registrar dato de producción)
+    Route::post('/puestas-en-marcha/{puesta_en_marcha}/produccion-detalle', [ProduccionController::class, 'storeDetalle']);
 
     // POST /api/cambios-operador (registrar cambio de operador)
     Route::post('/cambios-operador', [CambioOperadorController::class, 'store']);

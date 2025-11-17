@@ -25,51 +25,51 @@ Crear la estructura fundamental de la base de datos (migraciones Laravel), model
 
 ### Tareas
 
-- [ ] **T1.1 - Validar DBML del diagrama (v3.0)**  
+- [x] **T1.1 - Validar DBML del diagrama (v3.0)**  
   Revisar diagrama en /docs/diagrama_de_base_de_datos.md  
   Confirmar relaciones (FKs)  
   Confirmar nueva tabla incidencia_parada y su relación con puesta_en_marcha  
-  **Status:** ✗ Pendiente
+  **Status:** ✓ Completado
 
-- [ ] **T1.2 - Crear migración para tabla jornada**  
+- [x] **T1.2 - Crear migración para tabla jornada**  
   Crear archivo: database/migrations/create_jornada_table.php  
   Incluir: id, maquina_id, nombre, ts_inicio, ts_fin, operador_id_inicio, operador_id_actual, cantidad_producida_esperada, estado, timestamps  
-  **Status:** ✗ Pendiente
+  **Status:** ✓ Completado
 
-- [ ] **T1.3 - Crear migración para tabla cambio_operador_jornada**  
+- [x] **T1.3 - Crear migración para tabla cambio_operador_jornada**  
   Crear archivo: database/migrations/create_cambio_operador_jornada_table.php  
   Incluir: id, jornada_id, operador_anterior_id, operador_nuevo_id, ts_cambio, razon, creado_por, timestamps  
-  **Status:** ✗ Pendiente
+  **Status:** ✓ Completado
 
-- [ ] **T1.4 - Crear migración para tabla puesta_en_marcha**  
+- [x] **T1.4 - Crear migración para tabla puesta_en_marcha**  
   Crear archivo: database/migrations/create_puesta_en_marcha_table.php  
   Incluir: id, jornada_id, maquina_id, ts_inicio, ts_fin, estado, cantidad_producida_esperada, timestamps  
-  **Status:** ✗ Pendiente
+  **Status:** ✓ Completado
 
-- [ ] **T1.5 - Crear migración para tabla incidencia_parada (NUEVO v3.0)**  
+- [x] **T1.5 - Crear migración para tabla incidencia_parada (NUEVO v3.0)**  
   Crear archivo: database/migrations/create_incidencia_parada_table.php  
   Incluir: id, puesta_en_marcha_id (FK), maquina_id (FK), ts_inicio_parada, ts_fin_parada, duracion_segundos, motivo, notas, creado_por (user_id)  
-  **Status:** ✗ Pendiente
+  **Status:** ✓ Completado
 
-- [ ] **T1.6 - Crear migración para tabla produccion_detalle**  
+- [x] **T1.6 - Crear migración para tabla produccion_detalle**  
   Crear archivo: database/migrations/create_produccion_detalle_table.php  
   Incluir: id, puesta_en_marcha_id, maquina_id, ts, cantidad_producida, cantidad_buena, cantidad_fallada, tasa_defectos, payload_raw  
-  **Status:** ✗ Pendiente
+  **Status:** ✓ Completado
 
-- [ ] **T1.7 - Crear migración para tabla resumen_produccion**  
+- [x] **T1.7 - Crear migración para tabla resumen_produccion**  
   Crear archivo: database/migrations/create_resumen_produccion_table.php  
   Incluir: id, puesta_en_marcha_id, maquina_id, jornada_id, ... (campos de T1.6)  
-  **Status:** ✗ Pendiente
+  **Status:** ✓ Completado
 
-- [ ] **T1.8 - Ejecutar migraciones en PostgreSQL**  
+- [x] **T1.8 - Ejecutar migraciones en PostgreSQL**  
   Correr: php artisan migrate  
   Verificar: Todas las tablas existen  
-  **Status:** ✗ Pendiente
+  **Status:** ✓ Completado
 
-- [ ] **T1.9 - Crear índices de performance**  
+- [x] **T1.9 - Crear índices de performance**  
   Crear migración: database/migrations/add_production_indexes.php  
   Incluir índices para: produccion_detalle(puesta_en_marcha_id, ts), incidencia_parada(puesta_en_marcha_id), jornada(maquina_id, ts_inicio), resumen_produccion(maquina_id, creado_en)  
-  **Status:** ✗ Pendiente
+  **Status:** ✓ Completado
 
 - [ ] **T1.10 - Crear modelos Eloquent**  
   Crear: app/Models/Jornada.php  
@@ -78,9 +78,9 @@ Crear la estructura fundamental de la base de datos (migraciones Laravel), model
   Crear: app/Models/IncidenciaParada.php (NUEVO v3.0)  
   Crear: app/Models/ProduccionDetalle.php  
   Crear: app/Models/ResumenProduccion.php  
-  **Status:** ✗ Pendiente
+  **Status:** ✓ Completado
 
-- [ ] **T1.11 - Definir relaciones entre modelos**  
+- [x] **T1.11 - Definir relaciones entre modelos**  
   Jornada hasMany PuestaEnMarcha  
   Jornada hasMany CambioOperadorJornada  
   PuestaEnMarcha hasMany ProduccionDetalle  
@@ -103,36 +103,39 @@ Crear endpoints REST, validadores de estado (FSM) y la lógica de cálculo de KP
 
 ### Tareas
 
-- [ ] **T2.1 - Crear controlador JornadaController**  
+- [x] **T2.1 - Crear controlador JornadaController**  
   Métodos: store (crear), show (ver), update (cerrar)  
-  **Status:** ✗ Pendiente
+  **Status:** ✓ Completado
 
-- [ ] **T2.2 - Crear controlador CambioOperadorController**  
+- [x] **T2.2 - Crear controlador CambioOperadorController**  
   Métodos: store (registrar cambio)  
   Lógica: Actualizar operador_id_actual en jornada  
-  **Status:** ✗ Pendiente
+  **Status:** ✓ Completado
 
-- [ ] **T2.3 - Crear controlador PuestaEnMarchaController**  
+- [x] **T2.3 - Crear controlador PuestaEnMarchaController**  
   Métodos: store (iniciar), update (finalizar)  
-  **Status:** ✗ Pendiente
+  **UI/UX:** Agregado botón "Iniciar Puesta en Marcha" en jornada/show  
+  **Status:** ✓ Completado
 
-- [ ] **T2.4 - Crear controlador IncidenciaParadaController (NUEVO v3.0)**  
+- [x] **T2.4 - Crear controlador IncidenciaParadaController (NUEVO v3.0)**  
   Métodos: store (registrar parada no planificada), update (finalizar parada)  
-  **Status:** ✗ Pendiente
+  **UI/UX:** Agregado modal "Registrar Parada" con formulario AJAX en jornada/show  
+  **Status:** ✓ Completado
 
-- [ ] **T2.5 - Crear controlador ProduccionController**  
+- [x] **T2.5 - Crear controlador ProduccionController**  
   Métodos: storeDetalle (registrar dato granular)  
-  **Status:** ✗ Pendiente
+  **UI/UX:** Agregado modal "Registrar Producción" con formulario AJAX en jornada/show  
+  **Status:** ✓ Completado
 
-- [ ] **T2.6 - Crear rutas API**  
+- [x] **T2.6 - Crear rutas API**  
   Agregar rutas en: routes/api.php  
   POST /api/jornadas (crear)  
   POST /api/puestas-en-marcha (iniciar)  
-  POST /api/incidencias-parada (registrar parada)  
-  POST /api/produccion-detalle (registrar dato)  
-  **Status:** ✗ Pendiente
+  POST /api/puestas-en-marcha/{id}/incidencias-parada (registrar parada)  
+  POST /api/puestas-en-marcha/{id}/produccion-detalle (registrar dato)  
+  **Status:** ✓ Completado
 
-- [ ] **T2.7 - Crear Request validators (Lógica FSM - v3.0)**  
+- [x] **T2.7 - Crear Request validators (Lógica FSM - v3.0)**  
   Crear: app/Http/Requests/StoreJornadaRequest.php  
   Crear: app/Http/Requests/StorePuestaEnMarchaRequest.php  
   Lógica FSM: Validar que maquina.estado sea 'operativa'.  
@@ -140,7 +143,7 @@ Crear endpoints REST, validadores de estado (FSM) y la lógica de cálculo de KP
   Crear: app/Http/Requests/StoreIncidenciaParadaRequest.php  
   Lógica FSM: Validar que puesta_en_marcha.estado sea 'en_marcha'.  
   Crear: app/Http/Requests/StoreProduccionDetalleRequest.php  
-  **Status:** ✗ Pendiente
+  **Status:** ✓ Completado
 
 - [ ] **T2.8 - Implementar lógica de cálculo (Patrón Strategy - v3.0)**  
   Objetivo: Calcular KPIs (OEE, Disponibilidad, etc.) usando clases de estrategia.  

@@ -22,7 +22,7 @@ class StoreIncidenciaParadaRequest extends FormRequest
      */
     public function rules(): array
     {
-        $puestaEnMarcha = $this->route('puestaEnMarcha');
+        $puestaEnMarcha = $this->route('puesta_en_marcha');
 
         return [
             'motivo' => 'required|string|max:255',
@@ -44,7 +44,7 @@ class StoreIncidenciaParadaRequest extends FormRequest
     protected function prepareForValidation(): void
     {
         $this->merge([
-            'puesta_en_marcha_id' => $this->route('puestaEnMarcha')->id,
+            'puesta_en_marcha_id' => $this->route('puesta_en_marcha')->id,
         ]);
     }
 

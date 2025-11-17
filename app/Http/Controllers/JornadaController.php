@@ -63,6 +63,8 @@ class JornadaController extends Controller
             'operadorInicio',
             'operadorActual',
             'puestasEnMarcha',
+            'puestasEnMarcha.detallesProduccion',
+            'puestasEnMarcha.incidenciasParada',
             'cambiosOperador.operadorAnterior',
             'cambiosOperador.operadorNuevo',
         ]);

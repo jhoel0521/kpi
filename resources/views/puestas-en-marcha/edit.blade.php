@@ -14,7 +14,7 @@
               Llamamos al componente.
               Como pasamos 'puestaEnMarcha', el componente sabrá que es 'edit'.
             -->
-            <x-puesta-en-marcha-form :puestaEnMarcha="$puestaEnMarcha" />
+            <x-puesta-en-marcha-form :jornada="$puestaEnMarcha->jornada" :puestaEnMarcha="$puestaEnMarcha" />
         </div>
     </div>
 

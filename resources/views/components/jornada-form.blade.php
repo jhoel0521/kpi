@@ -5,11 +5,7 @@
 -->
 <form action="{{ $formAction }}" method="POST" class="space-y-4">
     @csrf
-
-    <!-- El método del formulario se define dinámicamente -->
-    @if ($jornada->exists)
-        @method('PATCH')
-    @endif
+    @method($formMethod)
 
     <!-- Mostrar errores de validación -->
     @if ($errors->any())

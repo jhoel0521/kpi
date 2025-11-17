@@ -21,7 +21,7 @@ class StoreProduccionDetalleRequest extends FormRequest
      */
     public function rules(): array
     {
-        $puestaEnMarcha = $this->route('puestaEnMarcha');
+        $puestaEnMarcha = $this->route('puesta_en_marcha');
 
         $rules = [
             'ts' => [
@@ -31,7 +31,7 @@ class StoreProduccionDetalleRequest extends FormRequest
                 'after_or_equal:'.$puestaEnMarcha->ts_inicio,
             ],
             'cantidad_producida' => 'required|integer|min:0',
-            'cantidad_buena' => 'nullable|integer|min:0|lte:cantidad_producida',
+            'cantidad_buena' => 'nullable|integer|min:0',
             'cantidad_fallada' => 'nullable|integer|min:0',
             'tasa_defectos' => 'nullable|numeric|min:0|max:100',
             'payload_raw' => 'nullable|array',
@@ -54,13 +54,18 @@ class StoreProduccionDetalleRequest extends FormRequest
     }
 
     /**
-     * Pre-poblar el validador con el puesta_en_marcha_id de la ruta.
+     * Configure the validator instance.
      */
-    protected function prepareForValidation(): void
+    public function withValidator($validator)
     {
-        $this->merge([
-            'puesta_en_marcha_id' => $this->route('puestaEnMarcha')->id,
-        ]);
+        $validator->after(function ($validator) {
+            $cantidadProducida = $this->input('cantidad_producida');
+            $cantidadBuena = $this->input('cantidad_buena');
+
+            if ($cantidadProducida !== null && $cantidadBuena !== null && $cantidadBuena > $cantidadProducida) {
+                $validator->errors()->add('cantidad_buena', 'La cantidad buena no puede ser mayor que la cantidad producida.');
+            }
+        });
     }
 
     /**
