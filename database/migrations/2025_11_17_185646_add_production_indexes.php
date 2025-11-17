@@ -18,7 +18,7 @@ return new class extends Migration
         Schema::table('incidencia_paradas', function (Blueprint $table) {
             $table->index(['maquina_id', 'ts_inicio_parada']);
             // El FK 'puesta_en_marcha_id' ya suele estar indexado, pero podemos asegurarlo
-            // $table->index('puesta_en_marcha_id'); 
+            // $table->index('puesta_en_marcha_id');
         });
 
         Schema::table('produccion_detalles', function (Blueprint $table) {

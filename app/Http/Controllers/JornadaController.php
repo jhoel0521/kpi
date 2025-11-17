@@ -2,11 +2,10 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\StoreJornadaRequest;
 use App\Models\Jornada;
 use App\Models\Maquina;
-use App\Models\User;
-use App\Http\Requests\StoreJornadaRequest; // Tarea T2.7
-use Illuminate\Http\Request;
+use App\Models\User; // Tarea T2.7
 
 class JornadaController extends Controller
 {
@@ -65,7 +64,7 @@ class JornadaController extends Controller
             'operadorActual',
             'puestasEnMarcha',
             'cambiosOperador.operadorAnterior',
-            'cambiosOperador.operadorNuevo'
+            'cambiosOperador.operadorNuevo',
         ]);
 
         return view('jornadas.show', compact('jornada'));
@@ -105,6 +104,7 @@ class JornadaController extends Controller
         // puestas en marcha activas, etc. Por ahora, es un borrado simple.
         try {
             $jornada->delete();
+
             return redirect()->route('jornadas.index')->with('success', 'Jornada eliminada exitosamente.');
         } catch (\Exception $e) {
             // Manejar error (ej. si está protegida por Foreign Key)

@@ -12,6 +12,7 @@ class LineaProduccion extends Model
     use HasFactory;
 
     protected $table = 'linea_produccions';
+
     protected $fillable = ['planta_id', 'nombre', 'estado'];
 
     public function planta(): BelongsTo

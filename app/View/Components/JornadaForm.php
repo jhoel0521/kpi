@@ -2,16 +2,18 @@
 
 namespace App\View\Components;
 
+use App\Models\Jornada;
 use Closure;
 use Illuminate\Contracts\View\View;
-use Illuminate\View\Component;
-use App\Models\Jornada;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\View\Component;
 
 class JornadaForm extends Component
 {
     public string $formAction;
+
     public string $formMethod;
+
     public string $submitButtonText;
 
     /**
@@ -28,7 +30,7 @@ class JornadaForm extends Component
         public ?Jornada $jornada = null
     ) {
         // Si $jornada es null, creamos una instancia vacía
-        $this->jornada = $jornada ?? new Jornada();
+        $this->jornada = $jornada ?? new Jornada;
 
         // Lógica para determinar si es Creación o Edición
         if ($this->jornada->exists) {

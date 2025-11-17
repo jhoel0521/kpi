@@ -7,16 +7,14 @@ use Illuminate\View\View;
 
 class AppLayout extends Component
 {
-    
     public ?string $title;
 
     public function __construct(?string $title = null)
     {
         // Asignamos el título, o un default si es nulo.
-        $this->title = $title ? $title . ' - KPI Dashboard' : 'KPI Dashboard';
+        $this->title = $title ? $title.' - KPI Dashboard' : 'KPI Dashboard';
     }
 
-    
     /**
      * Get the view / contents that represent the component.
      */

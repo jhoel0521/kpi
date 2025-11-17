@@ -12,6 +12,7 @@ class Maquina extends Model
     use HasFactory;
 
     protected $table = 'maquinas';
+
     protected $fillable = ['linea_produccion_id', 'nombre', 'serie', 'estado'];
 
     public function lineaProduccion(): BelongsTo
@@ -28,6 +29,7 @@ class Maquina extends Model
     {
         return $this->hasMany(PuestaEnMarcha::class);
     }
+
     public function incidenciasParada(): HasMany
     {
         return $this->hasMany(IncidenciaParada::class);

@@ -13,17 +13,17 @@ return new class extends Migration
     {
         Schema::create('cambio_operador_jornadas', function (Blueprint $table) {
             $table->id();
-            
+
             $table->foreignId('jornada_id')->constrained('jornadas')->onDelete('cascade');
-            
+
             $table->foreignId('operador_anterior_id')->nullable()->constrained('users')->onDelete('set null');
             $table->foreignId('operador_nuevo_id')->constrained('users')->onDelete('restrict');
-            
+
             $table->timestamp('ts_cambio')->useCurrent();
             $table->string('razon')->nullable()->comment('cambio de turno, relevo');
-            
+
             $table->foreignId('creado_por')->nullable()->comment('supervisor')->constrained('users')->onDelete('set null');
-            
+
             $table->timestamps();
         });
     }

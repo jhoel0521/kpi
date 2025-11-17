@@ -11,6 +11,7 @@ class Planta extends Model
     use HasFactory;
 
     protected $table = 'plantas';
+
     protected $fillable = ['nombre', 'zona_horaria'];
 
     public function lineasProduccion(): HasMany

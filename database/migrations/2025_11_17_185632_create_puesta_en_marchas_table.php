@@ -13,16 +13,16 @@ return new class extends Migration
     {
         Schema::create('puesta_en_marchas', function (Blueprint $table) {
             $table->id();
-            
+
             $table->foreignId('jornada_id')->constrained('jornadas')->onDelete('cascade');
             $table->foreignId('maquina_id')->constrained('maquinas')->onDelete('cascade');
-            
+
             $table->timestamp('ts_inicio')->comment('Inicio de UPTIME');
             $table->timestamp('ts_fin')->nullable()->comment('Fin de UPTIME');
-            
+
             $table->string('estado')->default('en_marcha')->comment('FSM: en_marcha, parada, finalizada');
             $table->bigInteger('cantidad_producida_esperada')->nullable()->comment('Meta (para Rendimiento)');
-            
+
             $table->timestamps();
         });
     }

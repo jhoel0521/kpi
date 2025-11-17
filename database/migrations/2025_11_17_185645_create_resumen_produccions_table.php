@@ -13,7 +13,7 @@ return new class extends Migration
     {
         Schema::create('resumen_produccions', function (Blueprint $table) {
             $table->id();
-            
+
             $table->foreignId('puesta_en_marcha_id')->unique()->constrained('puesta_en_marchas')->onDelete('cascade');
             $table->foreignId('maquina_id')->constrained('maquinas')->onDelete('cascade');
             $table->foreignId('jornada_id')->constrained('jornadas')->onDelete('cascade');
@@ -35,7 +35,7 @@ return new class extends Migration
             $table->decimal('disponibilidad_calculada', 8, 2)->nullable();
             $table->decimal('rendimiento_calculado', 8, 2)->nullable();
             $table->decimal('calidad_calculada', 8, 2)->nullable();
-            
+
             $table->timestamps();
         });
     }

@@ -13,7 +13,7 @@ return new class extends Migration
     {
         Schema::create('produccion_detalles', function (Blueprint $table) {
             $table->id();
-            
+
             $table->foreignId('puesta_en_marcha_id')->constrained('puesta_en_marchas')->onDelete('cascade');
             $table->unsignedBigInteger('maquina_id');
 
