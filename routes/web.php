@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\CambioOperadorController;
+use App\Http\Controllers\IncidenciaParadaController;
 use App\Http\Controllers\JornadaController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\PuestaEnMarchaController;
@@ -43,6 +44,17 @@ Route::middleware('auth')->group(function () {
     // DELETE /puestas-en-marcha/{puesta_en_marcha}
     Route::resource('puestas-en-marcha', PuestaEnMarchaController::class)
         ->only(['show', 'edit', 'update', 'destroy']);
+
+    // T2.4: Rutas para Incidencia de Parada (Anidadas en Puesta en Marcha)
+    // POST /puestas-en-marcha/{puesta_en_marcha}/incidencias-parada
+    Route::resource('puestas-en-marcha.incidencias-parada', IncidenciaParadaController::class)
+        ->shallow()
+        ->only(['store']);
+
+    // Rutas no anidadas para 'update'
+    // PATCH  /incidencias-parada/{incidencia_parada}
+    Route::resource('incidencias-parada', IncidenciaParadaController::class)
+        ->only(['update']);
 });
 
 require __DIR__.'/auth.php';
