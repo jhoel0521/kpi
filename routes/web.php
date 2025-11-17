@@ -1,7 +1,9 @@
 <?php
 
+use App\Http\Controllers\CambioOperadorController;
 use App\Http\Controllers\JornadaController;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\PuestaEnMarchaController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
@@ -19,6 +21,28 @@ Route::middleware('auth')->group(function () {
 
     // Rutas de jornadas protegidas
     Route::resource('jornadas', JornadaController::class);
+    // T2.2: Rutas para Cambio de Operador (Anidadas en Jornada)
+    // GET  /jornadas/{jornada}/cambios-operador/create
+    // POST /jornadas/{jornada}/cambios-operador
+    Route::resource('jornadas.cambios-operador', CambioOperadorController::class)
+        ->shallow() // ->shallow() evita que rutas como 'edit' sean anidadas
+        ->only(['create', 'store']);
+
+    // T2.3: Rutas para Puesta en Marcha
+    // GET  /jornadas/{jornada}/puestas-en-marcha/create
+    // POST /jornadas/{jornada}/puestas-en-marcha
+    Route::resource('jornadas.puestas-en-marcha', PuestaEnMarchaController::class)
+        ->shallow()
+        ->only(['create', 'store']);
+
+    // Rutas no anidadas para 'show', 'edit', 'update', 'destroy'
+    // (Gracias a shallow() de la definición anterior)
+    // GET    /puestas-en-marcha/{puesta_en_marcha}
+    // GET    /puestas-en-marcha/{puesta_en_marcha}/edit
+    // PATCH  /puestas-en-marcha/{puesta_en_marcha}
+    // DELETE /puestas-en-marcha/{puesta_en_marcha}
+    Route::resource('puestas-en-marcha', PuestaEnMarchaController::class)
+        ->only(['show', 'edit', 'update', 'destroy']);
 });
 
 require __DIR__.'/auth.php';
