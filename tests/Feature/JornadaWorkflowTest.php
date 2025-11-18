@@ -1,5 +1,7 @@
 <?php
 
+use App\Enums\EstadoJornada;
+use App\Enums\EstadoPuestaEnMarcha;
 use App\Http\Services\Interfaces\IncidenciaParadaServiceInterface;
 use App\Models\Jornada;
 use App\Models\Maquina;
@@ -20,20 +22,20 @@ it('completes full jornada workflow', function () {
             'maquina_id' => $maquina->id,
             'operador_id_inicio' => $user->id,
             'operador_id_actual' => $user->id,
-            'estado' => 'activa',
+            'estado' => EstadoJornada::ACTIVA,
         ]);
 
-        expect($jornada->estado)->toBe('activa');
+        expect($jornada->estado)->toBe(EstadoJornada::ACTIVA);
         expect($jornada->maquina_id)->toBe($maquina->id);
 
         // 2. Iniciar Puesta en Marcha
         $puestaEnMarcha = PuestaEnMarcha::factory()->create([
             'jornada_id' => $jornada->id,
             'maquina_id' => $maquina->id,
-            'estado' => 'en_marcha',
+            'estado' => EstadoPuestaEnMarcha::EN_MARCHA,
         ]);
 
-        expect($puestaEnMarcha->estado)->toBe('en_marcha');
+        expect($puestaEnMarcha->estado)->toBe(EstadoPuestaEnMarcha::EN_MARCHA);
 
         // 3. Registrar Producción inicial
         $produccion1 = ProduccionDetalle::factory()->create([
@@ -111,12 +113,12 @@ it('completes full jornada workflow', function () {
 
         // 10. Finalizar Jornada
         $jornada->update([
-            'estado' => 'finalizada',
+            'estado' => EstadoJornada::FINALIZADA,
             'ts_fin' => now(),
         ]);
         $jornada->refresh();
 
-        expect($jornada->estado)->toBe('finalizada');
+        expect($jornada->estado)->toBe(EstadoJornada::FINALIZADA);
         expect($jornada->ts_fin)->not->toBeNull();
 
         // Verificaciones finales

@@ -1,3 +1,8 @@
+@php
+    use App\Enums\EstadoJornada;
+    use App\Enums\EstadoPuestaEnMarcha;
+@endphp
+
 <x-app-layout title="Ver Jornada: {{ $jornada->nombre }}">
 
     <div class="max-w-4xl mx-auto p-4 sm:p-6 lg:p-8">
@@ -11,7 +16,7 @@
                 <p class="text-sm text-gray-600">
                     Máquina: {{ $jornada->maquina->nombre }} |
                     Estado: <span
-                        class="font-semibold @if ($jornada->estado == 'activa') text-green-600 @else text-gray-600 @endif">{{ ucfirst($jornada->estado) }}</span>
+                        class="font-semibold {{ $jornada->estado->color() }}">{{ $jornada->estado->label() }}</span>
                 </p>
             </div>
             <div>
@@ -62,17 +67,17 @@
             <div class="p-6 bg-white border-b border-gray-200">
                 <h3 class="text-lg font-semibold mb-4">Acciones Disponibles</h3>
                 <div class="flex flex-wrap gap-3">
-                    @if ($jornada->estado === 'activa' && $jornada->puestasEnMarcha->where('estado', 'en_marcha')->count() === 0)
+                    @if ($jornada->estado === EstadoJornada::ACTIVA && $jornada->puestasEnMarcha->where('estado', EstadoPuestaEnMarcha::EN_MARCHA->value)->count() === 0)
                         <a href="{{ route('jornadas.puestas-en-marcha.create', $jornada) }}"
                             class="inline-flex items-center px-4 py-2 bg-blue-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-blue-700 focus:bg-blue-700 active:bg-blue-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition ease-in-out duration-150">
                             Iniciar Puesta en Marcha
                         </a>
                     @endif
 
-                    @if ($jornada->puestasEnMarcha->where('estado', 'en_marcha')->count() > 0)
+                    @if ($jornada->puestasEnMarcha->where('estado', EstadoPuestaEnMarcha::EN_MARCHA->value)->count() > 0)
                         @php
                             $paradasActivas = $jornada->puestasEnMarcha
-                                ->where('estado', 'en_marcha')
+                                ->where('estado', EstadoPuestaEnMarcha::EN_MARCHA->value)
                                 ->flatMap->incidenciasParada->whereNull('ts_fin_parada');
                         @endphp
 
@@ -87,14 +92,14 @@
                             @endif
                         @else
                             <button type="button"
-                                onclick="openRegistroParadaModal({{ $jornada->puestasEnMarcha->where('estado', 'en_marcha')->first()->id }})"
+                                onclick="openRegistroParadaModal({{ $jornada->puestasEnMarcha->where('estado', EstadoPuestaEnMarcha::EN_MARCHA->value)->first()->id }})"
                                 class="inline-flex items-center px-4 py-2 bg-yellow-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-yellow-700 focus:bg-yellow-700 active:bg-yellow-900 focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:ring-offset-2 transition ease-in-out duration-150">
                                 Registrar Parada
                             </button>
                         @endif
 
                         <button type="button"
-                            onclick="openRegistroProduccionModal({{ $jornada->puestasEnMarcha->where('estado', 'en_marcha')->first()->id }})"
+                            onclick="openRegistroProduccionModal({{ $jornada->puestasEnMarcha->where('estado', EstadoPuestaEnMarcha::EN_MARCHA->value)->first()->id }})"
                             class="inline-flex items-center px-4 py-2 bg-green-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-green-700 focus:bg-green-700 active:bg-green-900 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 transition ease-in-out duration-150">
                             Registrar Producción
                         </button>
@@ -120,11 +125,8 @@
                                     </p>
                                 </div>
                                 <span
-                                    class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
-                                    @if ($puesta->estado === 'en_marcha') bg-green-100 text-green-800
-                                    @elseif($puesta->estado === 'finalizada') bg-blue-100 text-blue-800
-                                    @else bg-gray-100 text-gray-800 @endif">
-                                    {{ ucfirst(str_replace('_', ' ', $puesta->estado)) }}
+                                    class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium {{ $puesta->estado->badgeColor() }}">
+                                    {{ $puesta->estado->label() }}
                                 </span>
                             </div>
 

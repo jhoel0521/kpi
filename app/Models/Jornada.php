@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\EstadoJornada;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -27,6 +28,7 @@ class Jornada extends Model
     protected $casts = [
         'ts_inicio' => 'datetime',
         'ts_fin' => 'datetime',
+        'estado' => EstadoJornada::class,
     ];
 
     /**
