@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Services\Interfaces\IncidenciaParadaServiceInterface;
 use App\Models\IncidenciaParada;
 use App\Models\Jornada;
 use App\Models\Maquina;
@@ -10,7 +11,8 @@ use Illuminate\Support\Facades\DB;
 
 
 it('completes full jornada workflow', function () {
-    DB::transaction(function () {
+    $incidenciaParadaService = app(IncidenciaParadaServiceInterface::class);
+    DB::transaction(function () use ($incidenciaParadaService) {
         // Crear datos de prueba
         $user = User::factory()->create();
         $maquina = Maquina::factory()->create();
@@ -48,13 +50,7 @@ it('completes full jornada workflow', function () {
         expect($produccion1->tasa_defectos)->toEqual(5.0);
 
         // 4. Iniciar Parada
-        $parada1 = IncidenciaParada::factory()->create([
-            'puesta_en_marcha_id' => $puestaEnMarcha->id,
-            'maquina_id' => $maquina->id,
-            'ts_inicio_parada' => now(),
-            'motivo' => 'falla_electrica',
-            'notas' => 'Parada por falla eléctrica',
-        ]);
+        $parada1 = $incidenciaParadaService->registrarParada($puestaEnMarcha, 'falla_electrica', 'Parada por falla eléctrica');
 
         expect($parada1->ts_fin_parada)->toBeNull();
         expect($parada1->duracion_segundos)->toBeNull();
@@ -63,13 +59,10 @@ it('completes full jornada workflow', function () {
         $paradasActivas = $jornada->fresh()->puestasEnMarcha->flatMap->incidenciasParada->whereNull('ts_fin_parada');
         expect($paradasActivas)->toHaveCount(1);
 
-    // 5. Finalizar Parada
-    $tsFin1 = now()->addMinutes(5);
-    $parada1->update([
-        'ts_fin_parada' => $tsFin1,
-        'duracion_segundos' => $parada1->ts_inicio_parada->diffInSeconds($tsFin1),
-    ]);
-    $parada1->refresh();        expect($parada1->ts_fin_parada)->not->toBeNull();
+        // 5. Finalizar Parada
+        $parada1 = $incidenciaParadaService->finalizarParada($parada1, 'Parada finalizada por reparación');
+
+        expect($parada1->ts_fin_parada)->not->toBeNull();
         expect($parada1->duracion_segundos)->toBeGreaterThan(0);
 
         // Verificar que no hay paradas activas
@@ -88,13 +81,7 @@ it('completes full jornada workflow', function () {
         expect($produccion2->cantidad_producida)->toEqual(150.0);
 
         // 7. Iniciar otra Parada
-        $parada2 = IncidenciaParada::factory()->create([
-            'puesta_en_marcha_id' => $puestaEnMarcha->id,
-            'maquina_id' => $maquina->id,
-            'ts_inicio_parada' => now(),
-            'motivo' => 'falta_material',
-            'notas' => 'Falta de material',
-        ]);
+        $parada2 = $incidenciaParadaService->registrarParada($puestaEnMarcha, 'falta_material', 'Falta de material');
 
         expect($parada2->ts_fin_parada)->toBeNull();
 
@@ -102,13 +89,10 @@ it('completes full jornada workflow', function () {
         $paradasActivas = $jornada->fresh()->puestasEnMarcha->flatMap->incidenciasParada->whereNull('ts_fin_parada');
         expect($paradasActivas)->toHaveCount(1);
 
-    // 8. Finalizar segunda Parada
-    $tsFin2 = now()->addMinutes(10);
-    $parada2->update([
-        'ts_fin_parada' => $tsFin2,
-        'duracion_segundos' => $parada2->ts_inicio_parada->diffInSeconds($tsFin2),
-    ]);
-    $parada2->refresh();        expect($parada2->ts_fin_parada)->not->toBeNull();
+        // 8. Finalizar segunda Parada
+        $parada2 = $incidenciaParadaService->finalizarParada($parada2, 'Parada finalizada, material recibido');
+
+        expect($parada2->ts_fin_parada)->not->toBeNull();
         expect($parada2->duracion_segundos)->toBeGreaterThan(0);
 
         // Verificar que no hay paradas activas
@@ -122,7 +106,7 @@ it('completes full jornada workflow', function () {
             'cantidad_producida' => 200,
             'cantidad_buena' => 190,
             'cantidad_fallada' => 10,
-            'tasa_defectos' => (10/200)*100,
+            'tasa_defectos' => (10 / 200) * 100,
         ]);
 
         expect($produccion3->cantidad_producida)->toEqual(200.0);
