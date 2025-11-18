@@ -1,5 +1,7 @@
 <?php
 
+// Ruta: app/Http/Services/Implementations/IncidenciaParadaService.php
+
 namespace App\Http\Services\Implementations;
 
 use App\Http\Services\Interfaces\IncidenciaParadaServiceInterface;
@@ -13,17 +15,13 @@ class IncidenciaParadaService implements IncidenciaParadaServiceInterface
 {
     /**
      * Registra una nueva parada no planificada.
-     *
-     * @param PuestaEnMarcha $puestaEnMarcha
-     * @param string $motivo
-     * @param string $notas
-     * @return IncidenciaParada
      */
     public function registrarParada(PuestaEnMarcha $puestaEnMarcha, string $motivo, string $notas): IncidenciaParada
     {
         return DB::transaction(function () use ($puestaEnMarcha, $motivo, $notas) {
-            Log::info('Registrando parada para puesta en marcha ID: ' . $puestaEnMarcha->id);
+            Log::info("Registrando parada para PEM ID: {$puestaEnMarcha->id}");
 
+            // 1. Crear la incidencia
             $incidencia = $puestaEnMarcha->incidenciasParada()->create([
                 'maquina_id' => $puestaEnMarcha->maquina_id,
                 'ts_inicio_parada' => now(),
@@ -32,7 +30,12 @@ class IncidenciaParadaService implements IncidenciaParadaServiceInterface
                 'creado_por' => Auth::id(),
             ]);
 
-            Log::info('Parada registrada ID: ' . $incidencia->id);
+            // 2. CAMBIO DE ESTADO (Switch): Marcar la PEM como 'parada'
+            // Esto bloquea el registro de producción normal y cambia la UI
+            if ($puestaEnMarcha->estado === 'en_marcha') {
+                $puestaEnMarcha->update(['estado' => 'parada']);
+                Log::info("Estado de PEM {$puestaEnMarcha->id} cambiado a 'parada'");
+            }
 
             return $incidencia;
         });
@@ -40,33 +43,35 @@ class IncidenciaParadaService implements IncidenciaParadaServiceInterface
 
     /**
      * Finaliza una parada no planificada.
-     *
-     * @param IncidenciaParada $incidenciaParada
-     * @param string $notasFinalizacion
-     * @return IncidenciaParada
      */
     public function finalizarParada(IncidenciaParada $incidenciaParada, string $notasFinalizacion): IncidenciaParada
     {
         return DB::transaction(function () use ($incidenciaParada, $notasFinalizacion) {
-            Log::info('Finalizando parada ID: ' . $incidenciaParada->id . ', ts_fin_parada actual: ' . $incidenciaParada->ts_fin_parada);
+            Log::info("Finalizando parada ID: {$incidenciaParada->id}");
 
-            // Verificar que tenga timestamp de inicio, si no, setearlo a now()
-            if (!$incidenciaParada->ts_inicio_parada) {
-                Log::warning('Parada ID: ' . $incidenciaParada->id . ' sin ts_inicio_parada, seteando a now()');
-                $incidenciaParada->ts_inicio_parada = now();
+            // Validación defensiva (por si el binding fallara de nuevo, que no debería)
+            if (! $incidenciaParada->exists) {
+                throw new \Exception('Error crítico: Intentando finalizar una parada no persistida.');
             }
 
             $tsFin = now();
-            $duracionSegundos = $incidenciaParada->ts_inicio_parada->diffInSeconds($tsFin);
+            // Asegurar que ts_inicio existe
+            $tsInicio = $incidenciaParada->ts_inicio_parada ?? $incidenciaParada->created_at;
+            $duracionSegundos = $tsInicio->diffInSeconds($tsFin);
 
-            // Finalizar la parada
+            // 1. Actualizar la incidencia
             $incidenciaParada->update([
                 'ts_fin_parada' => $tsFin,
                 'duracion_segundos' => $duracionSegundos,
-                'notas' => ($incidenciaParada->notas ?? '') . ($notasFinalizacion ? "\n\nFinalización: " . $notasFinalizacion : ''),
+                'notas' => trim(($incidenciaParada->notas ?? '')."\n".$notasFinalizacion),
             ]);
 
-            Log::info('Parada ID: ' . $incidenciaParada->id . ' finalizada exitosamente, duración: ' . $duracionSegundos . ' segundos');
+            // 2. CAMBIO DE ESTADO (Switch): Reactivar la PEM a 'en_marcha'
+            $puestaEnMarcha = $incidenciaParada->puestaEnMarcha;
+            if ($puestaEnMarcha->estado === 'parada') {
+                $puestaEnMarcha->update(['estado' => 'en_marcha']);
+                Log::info("Estado de PEM {$puestaEnMarcha->id} restaurado a 'en_marcha'");
+            }
 
             return $incidenciaParada;
         });

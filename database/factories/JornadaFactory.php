@@ -2,7 +2,6 @@
 
 namespace Database\Factories;
 
-use App\Models\Jornada;
 use App\Models\Maquina;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;

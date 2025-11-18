@@ -7,6 +7,7 @@ use App\Http\Services\Interfaces\IncidenciaParadaServiceInterface;
 use App\Models\IncidenciaParada;
 use App\Models\PuestaEnMarcha;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 
 class IncidenciaParadaController extends Controller
 {
@@ -16,69 +17,68 @@ class IncidenciaParadaController extends Controller
     {
         $this->incidenciaParadaService = $incidenciaParadaService;
     }
-    /**
-     * Almacena (registra) una nueva parada no planificada.
-     * Tarea T2.4: store (registrar parada no planificada)
-     */
+
     public function store(StoreIncidenciaParadaRequest $request, PuestaEnMarcha $puestaEnMarcha)
     {
         $datosValidados = $request->validated();
 
-        $incidencia = $this->incidenciaParadaService->registrarParada(
-            $puestaEnMarcha,
-            $datosValidados['motivo'],
-            $datosValidados['notas'] ?? ''
-        );
+        try {
+            $incidencia = $this->incidenciaParadaService->registrarParada(
+                $puestaEnMarcha,
+                $datosValidados['motivo'],
+                $datosValidados['notas'] ?? ''
+            );
 
-        if ($request->expectsJson()) {
-            return response()->json([
-                'success' => true,
-                'message' => 'Parada no planificada registrada exitosamente.',
-                'data' => $incidencia,
-            ]);
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Parada registrada. Máquina detenida.',
+                    'data' => $incidencia,
+                ]);
+            }
+
+            return back()->with('success', 'Parada registrada.');
+        } catch (\Exception $e) {
+            Log::error('Error al registrar parada: '.$e->getMessage());
+            if ($request->expectsJson()) {
+                return response()->json(['success' => false, 'message' => 'Error interno al registrar parada'], 500);
+            }
+
+            return back()->with('error', 'Error al registrar parada.');
         }
-
-        return redirect()->route('jornadas.show', $puestaEnMarcha->jornada_id)
-            ->with('success', 'Parada no planificada registrada exitosamente.');
     }
 
-    /**
-     * Actualiza (finaliza) una parada no planificada.
-     * Tarea T2.4: update (finalizar parada)
-     */
-    public function update(Request $request, IncidenciaParada $incidenciaParada)
+    // IMPORTANTE: El nombre de la variable ($incidenciaParada) debe coincidir
+    // con el parámetro definido en routes/web.php ('incidenciaParada')
+    public function update(Request $request, $id)
     {
-        // Validación básica
+        // Buscar manualmente para evitar problemas de binding con IDs vacíos
+        $incidenciaParada = IncidenciaParada::findOrFail($id);
+
         $request->validate([
             'notas_finalizacion' => 'nullable|string|max:1000',
         ]);
 
-        // Lógica FSM: Solo se pueden finalizar paradas que no estén finalizadas
         if ($incidenciaParada->ts_fin_parada !== null) {
-            if ($request->expectsJson()) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Esta parada ya está finalizada.',
-                ], 422);
-            }
-
-            return redirect()->route('jornadas.show', $incidenciaParada->puestaEnMarcha->jornada_id)
-                ->with('error', 'Esta parada ya está finalizada.');
+            return response()->json([
+                'success' => false,
+                'message' => 'Esta parada ya está finalizada.',
+            ], 422);
         }
 
-        $notasFinalizacion = $request->input('notas_finalizacion', '');
+        try {
+            $notas = $request->input('notas_finalizacion', '');
+            $incidencia = $this->incidenciaParadaService->finalizarParada($incidenciaParada, $notas);
 
-        $incidencia = $this->incidenciaParadaService->finalizarParada($incidenciaParada, $notasFinalizacion);
-
-        if ($request->expectsJson()) {
             return response()->json([
                 'success' => true,
-                'message' => 'Parada finalizada exitosamente.',
+                'message' => 'Parada finalizada. Máquina en marcha nuevamente.',
                 'data' => $incidencia,
             ]);
-        }
+        } catch (\Exception $e) {
+            Log::error('Error al finalizar parada: '.$e->getMessage());
 
-        return redirect()->route('jornadas.show', $incidenciaParada->puestaEnMarcha->jornada_id)
-            ->with('success', 'Parada finalizada exitosamente.');
+            return response()->json(['success' => false, 'message' => 'Error interno al finalizar parada'], 500);
+        }
     }
 }

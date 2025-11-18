@@ -77,11 +77,14 @@
                         @endphp
 
                         @if ($paradasActivas->count() > 0)
-                            <button type="button"
-                                onclick="openFinalizarParadaModal({{ $paradasActivas->first()->id }})"
-                                class="inline-flex items-center px-4 py-2 bg-red-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-red-700 focus:bg-red-700 active:bg-red-900 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 transition ease-in-out duration-150">
-                                Finalizar Parada
-                            </button>
+                            @php $paradaActiva = $paradasActivas->first(); @endphp
+                            @if($paradaActiva && $paradaActiva->id)
+                                <button type="button"
+                                    onclick="openFinalizarParadaModal({{ $paradaActiva->id }})"
+                                    class="inline-flex items-center px-4 py-2 bg-red-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-red-700 focus:bg-red-700 active:bg-red-900 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 transition ease-in-out duration-150">
+                                    Finalizar Parada
+                                </button>
+                            @endif
                         @else
                             <button type="button"
                                 onclick="openRegistroParadaModal({{ $jornada->puestasEnMarcha->where('estado', 'en_marcha')->first()->id }})"
@@ -385,6 +388,10 @@
         }
 
         function openFinalizarParadaModal(incidenciaParadaId) {
+            if (!incidenciaParadaId) {
+                alert('Error: ID de parada no válido.');
+                return;
+            }
             document.getElementById('incidenciaParadaId').value = incidenciaParadaId;
             document.getElementById('finalizarParadaModal').classList.remove('hidden');
         }

@@ -4,7 +4,6 @@ namespace Database\Factories;
 
 use App\Models\Jornada;
 use App\Models\Maquina;
-use App\Models\PuestaEnMarcha;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**

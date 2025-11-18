@@ -1,14 +1,15 @@
 <?php
 
 use App\Http\Services\Interfaces\IncidenciaParadaServiceInterface;
-use App\Models\IncidenciaParada;
 use App\Models\Jornada;
 use App\Models\Maquina;
-use App\Models\PuestaEnMarcha;
 use App\Models\ProduccionDetalle;
+use App\Models\PuestaEnMarcha;
 use App\Models\User;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 
+uses(RefreshDatabase::class);
 
 it('completes full jornada workflow', function () {
     $incidenciaParadaService = app(IncidenciaParadaServiceInterface::class);

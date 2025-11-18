@@ -2,7 +2,6 @@
 
 namespace Database\Factories;
 
-use App\Models\IncidenciaParada;
 use App\Models\Maquina;
 use App\Models\PuestaEnMarcha;
 use Illuminate\Database\Eloquent\Factories\Factory;
